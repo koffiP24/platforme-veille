@@ -19,4 +19,6 @@ export class UpdateActionDto {
   @IsOptional() @IsString() @MaxLength(2000) impact?: string;
   @IsOptional() @IsString() @MaxLength(2000) decision?: string;
   @IsOptional() @IsDateString() dueDate?: string | null;
+  @IsOptional() @IsString() @MaxLength(5000) progressComment?: string;
+  @IsOptional() @IsString() @MaxLength(10000) result?: string;
 }

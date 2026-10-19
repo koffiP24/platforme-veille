@@ -400,6 +400,12 @@ const actionForm =
         impact:
             '',
 
+        progressComment:
+            '',
+
+        result:
+            '',
+
         dueDate:
             '',
 
@@ -457,6 +463,12 @@ const editActionForm =
             'ANALYSE_IMPACT',
 
         impact:
+            '',
+
+        progressComment:
+            '',
+
+        result:
             '',
 
         dueDate:
@@ -1274,6 +1286,12 @@ async function submitAction() {
                     ||
                     undefined,
 
+                progressComment:
+                    actionForm.value.progressComment || undefined,
+
+                result:
+                    actionForm.value.result || undefined,
+
                 dueDate:
                     actionForm.value.dueDate
                     ||
@@ -1300,6 +1318,12 @@ async function submitAction() {
                 'ANALYSE_IMPACT',
 
             impact:
+                '',
+
+            progressComment:
+                '',
+
+            result:
                 '',
 
             dueDate:
@@ -1400,6 +1424,16 @@ async function openEditAction(
             ??
             '',
 
+        progressComment:
+            action.progressComment
+            ??
+            '',
+
+        result:
+            action.result
+            ??
+            '',
+
         dueDate:
             action.dueDate
             ??
@@ -1481,6 +1515,12 @@ async function submitActionEdit() {
 
                 impact:
                     editActionForm.value.impact,
+
+                progressComment:
+                    editActionForm.value.progressComment,
+
+                result:
+                    editActionForm.value.result,
 
                 dueDate:
                     editActionForm.value.dueDate
@@ -2443,6 +2483,16 @@ onMounted(
 
                     </div>
 
+                    <div>
+                        <label class="mb-2 block">Commentaire d’avancement</label>
+                        <Textarea v-model="actionForm.progressComment" rows="3" class="w-full" placeholder="Informations sur le suivi prévu..." />
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block">Résultat ou conclusion</label>
+                        <Textarea v-model="actionForm.result" rows="3" class="w-full" placeholder="À compléter à la fin de l’action..." />
+                    </div>
+
 
                     <div class="grid gap-4 md:grid-cols-2">
 
@@ -2573,6 +2623,16 @@ onMounted(
                             " rows="4" class="w-full" :disabled="editActionSubmitting
                                 " />
 
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block">Commentaire d’avancement</label>
+                        <Textarea v-model="editActionForm.progressComment" rows="3" class="w-full" :disabled="editActionSubmitting" />
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block">Résultat ou conclusion</label>
+                        <Textarea v-model="editActionForm.result" rows="3" class="w-full" :disabled="editActionSubmitting" />
                     </div>
 
 

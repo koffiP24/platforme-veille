@@ -12,6 +12,8 @@ import {
 import Button from 'primevue/button';
 import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
+import Dialog from 'primevue/dialog';
+import Textarea from 'primevue/textarea';
 import Tag from 'primevue/tag';
 
 import {
@@ -60,6 +62,17 @@ const auth =
 
 const toast =
     useToast();
+const finishDialog = ref(false);
+const finishingAction = ref<FollowUpAction | null>(null);
+const finishProgressComment = ref('');
+const finishResult = ref('');
+
+function openFinishDialog(action: FollowUpAction) {
+    finishingAction.value = action;
+    finishProgressComment.value = action.progressComment ?? '';
+    finishResult.value = action.result ?? '';
+    finishDialog.value = true;
+}
 
 const updating =
     ref<number[]>([]);
@@ -197,6 +210,10 @@ async function updateStatus(
     status:
         string,
 ) {
+    if (status === 'DONE') {
+        openFinishDialog(action);
+        return;
+    }
     if (
         updating.value.includes(
             action.id,
@@ -253,6 +270,26 @@ async function updateStatus(
                     id !==
                     action.id,
             );
+    }
+}
+
+async function confirmFinishAction() {
+    const action = finishingAction.value;
+    if (!action || updating.value.includes(action.id)) return;
+    updating.value.push(action.id);
+    try {
+        await updateAction(action.id, {
+            status: 'DONE',
+            progressComment: finishProgressComment.value,
+            result: finishResult.value,
+        });
+        finishDialog.value = false;
+        actionSuccess(toast, 'Action terminée', `L’action « ${action.title} » a été clôturée.`);
+        await load();
+    } catch (error) {
+        actionError(toast, error, 'Clôture impossible', 'Les informations de clôture n’ont pas pu être enregistrées.');
+    } finally {
+        updating.value = updating.value.filter((id) => id !== action.id);
     }
 }
 
@@ -487,11 +524,31 @@ onMounted(
 
         </div>
 
+        <Dialog v-model:visible="finishDialog" modal header="Terminer l’action" class="w-full max-w-xl">
+            <p v-if="finishingAction">Renseignez les informations réalisées pour « {{ finishingAction.title }} » avant de confirmer sa clôture.</p>
+            <div class="finish-fields">
+                <div>
+                    <label>Commentaire d’avancement</label>
+                    <Textarea v-model="finishProgressComment" rows="4" class="w-full" placeholder="Décrivez le travail effectué..." />
+                </div>
+                <div>
+                    <label>Résultat ou conclusion</label>
+                    <Textarea v-model="finishResult" rows="4" class="w-full" placeholder="Indiquez le résultat obtenu ou la conclusion..." />
+                </div>
+            </div>
+            <template #footer>
+                <Button label="Annuler" severity="secondary" text @click="finishDialog = false" />
+                <Button label="Valider et terminer" icon="pi pi-check" severity="success" :loading="finishingAction ? updating.includes(finishingAction.id) : false" @click="confirmFinishAction" />
+            </template>
+        </Dialog>
+
     </AppLayout>
 </template>
 
 
 <style scoped>
+.finish-fields { display: grid; gap: 1rem; }
+.finish-fields label { display: block; margin-bottom: .4rem; font-weight: 700; color: var(--app-text-secondary); }
 .actions-page {
     display:
         grid;

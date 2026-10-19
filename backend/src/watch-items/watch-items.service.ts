@@ -13,6 +13,7 @@ import { WatchVersion } from './entities/watch-version.entity';
 import { DeduplicationService } from './deduplication.service';
 
 import { NormalizedWatchItem } from './interfaces/normalized-watch-item.interface';
+import { AiAnalysisService } from '../ai/ai-analysis.service';
 
 export type IngestionResult = 'CREE' | 'MIS_A_JOUR' | 'DOUBLON';
 
@@ -26,6 +27,7 @@ export class WatchItemsService {
     private readonly versionRepository: Repository<WatchVersion>,
 
     private readonly deduplicationService: DeduplicationService,
+    private readonly aiAnalysis: AiAnalysisService,
   ) {}
 
   async isUnchanged(normalized: NormalizedWatchItem): Promise<boolean> {
@@ -79,6 +81,7 @@ export class WatchItemsService {
       const saved = await this.watchItemRepository.save(watchItem);
 
       await this.createVersion(saved, normalized);
+      this.aiAnalysis.scheduleAutomaticAnalysis(saved.id);
 
       return 'CREE';
     }
@@ -93,6 +96,7 @@ export class WatchItemsService {
         existing.language = normalized.language ?? existing.language;
         const saved = await this.watchItemRepository.save(existing);
         await this.createVersion(saved, normalized);
+        this.aiAnalysis.scheduleAutomaticAnalysis(saved.id);
         return 'MIS_A_JOUR';
       }
       return 'DOUBLON';
@@ -131,6 +135,7 @@ export class WatchItemsService {
     const saved = await this.watchItemRepository.save(existing);
 
     await this.createVersion(saved, normalized);
+    this.aiAnalysis.scheduleAutomaticAnalysis(saved.id);
 
     return 'MIS_A_JOUR';
   }

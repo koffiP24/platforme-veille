@@ -4,6 +4,7 @@ import {
   onMounted,
   ref,
 } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
   isAxiosError,
@@ -87,6 +88,19 @@ interface DeleteTarget {
 
 const toast =
   useToast();
+const route = useRoute();
+const router = useRouter();
+const taxonomyTabs: TaxonomyKind[] = ['topics', 'domains', 'laboratories', 'keywords'];
+const initialTab = typeof route.query.tab === 'string' && taxonomyTabs.includes(route.query.tab as TaxonomyKind)
+  ? route.query.tab as TaxonomyKind
+  : 'topics';
+const activeTaxonomyTab = ref<TaxonomyKind>(initialTab);
+
+function changeTaxonomyTab(value: string | number | undefined) {
+  if (typeof value !== 'string' || !taxonomyTabs.includes(value as TaxonomyKind)) return;
+  activeTaxonomyTab.value = value as TaxonomyKind;
+  void router.replace({ query: { ...route.query, tab: value } });
+}
 
 
 const topics =
@@ -1002,7 +1016,7 @@ onMounted(
 
       <SectionCard>
 
-        <Tabs value="topics" class="taxonomy-tabs">
+        <Tabs v-model:value="activeTaxonomyTab" class="taxonomy-tabs" @update:value="changeTaxonomyTab">
 
           <TabList>
             <Tab value="topics">
@@ -1054,7 +1068,7 @@ onMounted(
                 </div>
 
 
-                <DataTable :value="topics
+                  <DataTable :value="topics
                   " :loading="loading
                     " paginator :rows="10
                       ">
@@ -1064,7 +1078,7 @@ onMounted(
                   </template>
 
 
-                  <Column field="label" header="Libellé" />
+                  <Column field="label" header="Libellé" sortable />
 
 
                   <Column field="description" header="Description">
@@ -1180,7 +1194,7 @@ onMounted(
                   </template>
 
 
-                  <Column field="name" header="Nom" />
+                  <Column field="name" header="Nom" sortable />
 
 
                   <Column header="Description">
@@ -1296,7 +1310,7 @@ onMounted(
                   </template>
 
 
-                  <Column field="name" header="Nom" />
+                  <Column field="name" header="Nom" sortable />
 
 
                   <Column header="Description">
@@ -1412,10 +1426,10 @@ onMounted(
                   </template>
 
 
-                  <Column field="label" header="Mot-clé" />
+                  <Column field="label" header="Mot-clé" sortable />
 
 
-                  <Column header="Poids">
+                  <Column field="weight" header="Poids" sortable>
                     <template #body="{ data }">
 
                       <div class="weight-cell">

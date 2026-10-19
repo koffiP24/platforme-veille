@@ -12,11 +12,13 @@ import { DeduplicationService } from './deduplication.service';
 import { WatchItemsService } from './watch-items.service';
 
 import { WatchItemsController } from './watch-items.controller';
+import { AiAnalysisModule } from '../ai/ai-analysis.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     TypeOrmModule.forFeature([WatchItem, WatchVersion]),
+    AiAnalysisModule,
   ],
 
   providers: [DeduplicationService, WatchItemsService],

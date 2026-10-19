@@ -42,9 +42,15 @@ export class ValidationService {
       const reviewRepo = manager.getRepository(Review);
       const item = await itemRepo.findOne({ where: { id: itemId } });
       if (!item) throw new NotFoundException('Élément de veille introuvable');
-      if (item.status !== WATCH_STATUS.TO_QUALIFY) {
+      const allowedStatuses = dto.decision === 'REJECT'
+        ? [WATCH_STATUS.NEW, WATCH_STATUS.TO_QUALIFY]
+        : [WATCH_STATUS.TO_QUALIFY];
+      const previousStatus = item.status;
+      if (!allowedStatuses.includes(item.status as any)) {
         throw new ConflictException(
-          'Seul un élément À qualifier peut être validé ou rejeté.',
+          dto.decision === 'REJECT'
+            ? 'Seul un élément nouveau ou À qualifier peut être rejeté.'
+            : 'Seul un élément À qualifier peut être validé.',
         );
       }
       const reviewer = await userRepo.findOne({ where: { id: reviewerId } });
@@ -76,7 +82,7 @@ export class ValidationService {
         watchItem: item,
         reviewer,
       });
-      return { item, review: await reviewRepo.save(review) };
+      return { item, review: await reviewRepo.save(review), previousStatus };
     });
 
     await this.auditService.log({
@@ -87,7 +93,7 @@ export class ValidationService {
           : 'REJECT_WATCH_ITEM',
       entity: 'watch_items',
       entityId: result.item.id,
-      beforeValue: { status: WATCH_STATUS.TO_QUALIFY },
+      beforeValue: { status: result.previousStatus },
       afterValue: {
         status: result.item.status,
         relevance: result.item.relevance,

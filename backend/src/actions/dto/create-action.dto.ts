@@ -21,4 +21,6 @@ export class CreateActionDto {
   @IsOptional() @IsString() @MaxLength(2000) impact?: string;
   @IsOptional() @IsDateString() dueDate?: string;
   @IsInt() ownerId: number;
+  @IsOptional() @IsString() @MaxLength(5000) progressComment?: string;
+  @IsOptional() @IsString() @MaxLength(10000) result?: string;
 }

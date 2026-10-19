@@ -9,7 +9,7 @@ import { criticalityFromScore } from '../common/priority';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 
 import { WatchItem } from '../watch-items/entities/watch-item.entity';
 
@@ -27,6 +27,37 @@ import { Laboratory } from '../taxonomy/entities/laboratory.entity';
 
 import { QualifyWatchItemDto } from './dto/qualify-watch-item.dto';
 import { AuditService } from '../audit/audit.service';
+
+function normalizeTaxonomyName(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('fr-FR');
+}
+
+async function resolveTaxonomyNames<T extends { id: number }>(
+  repository: Repository<T>,
+  labels: string[] | undefined,
+  getLabel: (entity: T) => string,
+  build: (label: string, index: number) => T,
+) {
+  const entities = await repository.find();
+  const byLabel = new Map(entities.map((entity) => [normalizeTaxonomyName(getLabel(entity)), entity]));
+  const resolved: T[] = [];
+  const created: string[] = [];
+  for (const [index, rawLabel] of (labels ?? []).entries()) {
+    const label = rawLabel.trim().slice(0, 150);
+    const key = normalizeTaxonomyName(label);
+    if (!key) continue;
+    let entity = byLabel.get(key);
+    if (!entity) {
+      const createdEntity = repository.create(build(label, index) as unknown as T);
+      entity = await repository.save(createdEntity);
+      if (!entity) continue;
+      byLabel.set(key, entity);
+      created.push(label);
+    }
+    if (!resolved.some((entry) => entry.id === entity.id)) resolved.push(entity);
+  }
+  return { entities: resolved, created };
+}
 
 @Injectable()
 export class QualificationService {
@@ -52,6 +83,7 @@ export class QualificationService {
     @InjectRepository(Laboratory)
     private readonly laboratoryRepository: Repository<Laboratory>,
 
+    private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
   ) {}
 
@@ -77,6 +109,25 @@ export class QualificationService {
       );
     }
 
+    const result = await this.dataSource.transaction(async (manager) => {
+      const itemRepository = manager.getRepository(WatchItem);
+      const suggestions = dto.createMissingTaxonomy === true
+        ? await (async () => {
+          const [topics, domains, keywords, laboratories] = await Promise.all([
+            resolveTaxonomyNames(manager.getRepository(Topic), dto.topicLabels, (entry) => entry.label, (label) => ({ label, description: null, parent: null }) as Topic),
+            resolveTaxonomyNames(manager.getRepository(Domain), dto.domainNames, (entry) => entry.name, (name) => ({ name, description: null, active: true }) as Domain),
+            resolveTaxonomyNames(manager.getRepository(Keyword), dto.keywordLabels, (entry) => entry.label, (label, index) => ({ label, weight: Math.min(10, Math.max(1, dto.keywordWeights?.[index] ?? 5)), active: true }) as Keyword),
+            resolveTaxonomyNames(manager.getRepository(Laboratory), dto.laboratoryNames, (entry) => entry.name, (name) => ({ name, description: null, active: true }) as Laboratory),
+          ]);
+          return { topics, domains, keywords, laboratories };
+        })()
+        : null;
+
+    const topicIds = [...new Set([...dto.topicIds, ...(suggestions?.topics.entities.map(({ id }) => id) ?? [])])];
+    const domainIds = [...new Set([...dto.domainIds, ...(suggestions?.domains.entities.map(({ id }) => id) ?? [])])];
+    const keywordIds = [...new Set([...dto.keywordIds, ...(suggestions?.keywords.entities.map(({ id }) => id) ?? [])])];
+    const laboratoryIds = [...new Set([...dto.laboratoryIds, ...(suggestions?.laboratories.entities.map(({ id }) => id) ?? [])])];
+
     const beforeValue = {
       watchType: item.watchType,
       relevance: item.relevance,
@@ -86,35 +137,35 @@ export class QualificationService {
       laboratoryIds: item.laboratories.map((laboratory) => laboratory.id),
     };
 
-    const topics = dto.topicIds.length
-      ? await this.topicRepository.findBy({
-          id: In(dto.topicIds),
+    const topics = topicIds.length
+      ? await manager.getRepository(Topic).findBy({
+          id: In(topicIds),
         })
       : [];
 
-    const keywords = dto.keywordIds.length
-      ? await this.keywordRepository.findBy({
-          id: In(dto.keywordIds),
+    const keywords = keywordIds.length
+      ? await manager.getRepository(Keyword).findBy({
+          id: In(keywordIds),
         })
       : [];
 
-    const domains = dto.domainIds.length
-      ? await this.domainRepository.findBy({
-          id: In(dto.domainIds),
+    const domains = domainIds.length
+      ? await manager.getRepository(Domain).findBy({
+          id: In(domainIds),
         })
       : [];
 
-    const laboratories = dto.laboratoryIds.length
-      ? await this.laboratoryRepository.findBy({
-          id: In(dto.laboratoryIds),
+    const laboratories = laboratoryIds.length
+      ? await manager.getRepository(Laboratory).findBy({
+          id: In(laboratoryIds),
         })
       : [];
 
     if (
-      topics.length !== dto.topicIds.length ||
-      keywords.length !== dto.keywordIds.length ||
-      domains.length !== dto.domainIds.length ||
-      laboratories.length !== dto.laboratoryIds.length
+      topics.length !== topicIds.length ||
+      keywords.length !== keywordIds.length ||
+      domains.length !== domainIds.length ||
+      laboratories.length !== laboratoryIds.length
     ) {
       throw new BadRequestException(
         'Une ou plusieurs valeurs de taxonomie sont invalides.',
@@ -132,20 +183,22 @@ export class QualificationService {
 
     item.status = 'A_QUALIFIER';
 
-    await this.itemRepository.save(item);
+    await itemRepository.save(item);
 
-    await this.topicLinkRepository.delete({
+    const topicLinkRepository = manager.getRepository(WatchItemTopic);
+    const keywordLinkRepository = manager.getRepository(WatchItemKeyword);
+    await topicLinkRepository.delete({
       watchItemId: item.id,
     });
 
-    await this.keywordLinkRepository.delete({
+    await keywordLinkRepository.delete({
       watchItemId: item.id,
     });
 
     if (topics.length) {
-      await this.topicLinkRepository.save(
+      await topicLinkRepository.save(
         topics.map((topic) =>
-          this.topicLinkRepository.create({
+          topicLinkRepository.create({
             watchItemId: item.id,
 
             topicId: topic.id,
@@ -163,9 +216,9 @@ export class QualificationService {
     }
 
     if (keywords.length) {
-      await this.keywordLinkRepository.save(
+      await keywordLinkRepository.save(
         keywords.map((keyword) =>
-          this.keywordLinkRepository.create({
+          keywordLinkRepository.create({
             watchItemId: item.id,
 
             keywordId: keyword.id,
@@ -182,29 +235,52 @@ export class QualificationService {
       );
     }
 
-    const qualified = await this.getQualification(item.id);
+    const qualified = await itemRepository.findOne({
+      where: { id: item.id },
+      relations: {
+        source: true,
+        domains: true,
+        laboratories: true,
+        topicLinks: { topic: true },
+        keywordLinks: { keyword: true },
+      },
+    });
+    if (!qualified) throw new NotFoundException('Élément introuvable');
+
+    return {
+      qualified,
+      beforeValue,
+      createdTaxonomy: suggestions ? {
+        topics: suggestions.topics.created,
+        domains: suggestions.domains.created,
+        keywords: suggestions.keywords.created,
+        laboratories: suggestions.laboratories.created,
+      } : {},
+    };
+    });
 
     await this.auditService.log({
       userId,
       action: 'QUALIFY_WATCH_ITEM',
       entity: 'watch_items',
       entityId: item.id,
-      beforeValue,
+      beforeValue: result.beforeValue,
       afterValue: {
-        watchType: qualified.watchType,
-        relevance: qualified.relevance,
-        criticality: qualified.criticality,
-        status: qualified.status,
-        domainIds: qualified.domains.map((domain) => domain.id),
-        laboratoryIds: qualified.laboratories.map(
+        watchType: result.qualified.watchType,
+        relevance: result.qualified.relevance,
+        criticality: result.qualified.criticality,
+        status: result.qualified.status,
+        domainIds: result.qualified.domains.map((domain) => domain.id),
+        laboratoryIds: result.qualified.laboratories.map(
           (laboratory) => laboratory.id,
         ),
-        topicIds: qualified.topicLinks.map((link) => link.topic.id),
-        keywordIds: qualified.keywordLinks.map((link) => link.keyword.id),
+        topicIds: result.qualified.topicLinks.map((link) => link.topic.id),
+        keywordIds: result.qualified.keywordLinks.map((link) => link.keyword.id),
+        createdTaxonomy: result.createdTaxonomy,
       },
     });
 
-    return qualified;
+    return result.qualified;
   }
 
   async getQualification(itemId: number) {

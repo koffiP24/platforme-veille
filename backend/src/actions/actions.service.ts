@@ -52,6 +52,10 @@ export class ActionsService {
         decision: null,
         dueDate: dto.dueDate ?? null,
         status: 'OPEN',
+        progressComment: dto.progressComment?.trim() || null,
+        result: dto.result?.trim() || null,
+        startedAt: null,
+        completedAt: null,
         watchItem: item,
         owner,
       }),
@@ -123,11 +127,17 @@ export class ActionsService {
       }
       action.owner = await this.findAssignableOwner(dto.ownerId);
     }
-    if (dto.status !== undefined) action.status = dto.status;
+    if (dto.status !== undefined) {
+      action.status = dto.status;
+      if (dto.status === 'IN_PROGRESS' && !action.startedAt) action.startedAt = new Date();
+      if (dto.status === 'DONE' && !action.completedAt) action.completedAt = new Date();
+    }
     if (dto.impact !== undefined) action.impact = dto.impact.trim() || null;
     if (dto.decision !== undefined)
       action.decision = dto.decision.trim() || null;
     if (dto.dueDate !== undefined) action.dueDate = dto.dueDate;
+    if (dto.progressComment !== undefined) action.progressComment = dto.progressComment.trim() || null;
+    if (dto.result !== undefined) action.result = dto.result.trim() || null;
     const saved = await this.actionRepository.save(action);
     await this.auditService.log({
       userId: currentUser.id,
@@ -211,6 +221,10 @@ export class ActionsService {
       decision: action.decision,
       dueDate: action.dueDate,
       status: action.status,
+      progressComment: action.progressComment,
+      result: action.result,
+      startedAt: action.startedAt,
+      completedAt: action.completedAt,
       owner: ownerName,
       watchItem: action.watchItem?.title ?? null,
     };

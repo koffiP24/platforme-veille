@@ -22,6 +22,10 @@ export class FollowUpAction {
   @Column({ name: 'due_date', type: 'date', nullable: true }) dueDate:
     string | null;
   @Column({ length: 30, default: 'OPEN' }) status: string;
+  @Column({ name: 'progress_comment', type: 'text', nullable: true }) progressComment: string | null;
+  @Column({ name: 'result', type: 'text', nullable: true }) result: string | null;
+  @Column({ name: 'started_at', type: 'timestamptz', nullable: true }) startedAt: Date | null;
+  @Column({ name: 'completed_at', type: 'timestamptz', nullable: true }) completedAt: Date | null;
 
   @ManyToOne(() => WatchItem, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'watch_item_id' })

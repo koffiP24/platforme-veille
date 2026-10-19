@@ -384,6 +384,12 @@ const actionLabels:
   QUALIFY_WATCH_ITEM:
     'Qualification d’une veille',
 
+  AI_ANALYSIS_PROPOSED:
+    'Proposition d’analyse par IA',
+
+  AI_ANALYSIS_REVIEWED:
+    'Relecture humaine d’une analyse IA',
+
   VALIDATE_WATCH_ITEM:
     'Validation d’une veille',
 

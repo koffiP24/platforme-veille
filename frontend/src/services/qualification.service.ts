@@ -21,6 +21,12 @@ export interface QualificationPayload {
   domainIds: number[];
 
   laboratoryIds: number[];
+  createMissingTaxonomy?: boolean;
+  topicLabels?: string[];
+  domainNames?: string[];
+  keywordLabels?: string[];
+  keywordWeights?: number[];
+  laboratoryNames?: string[];
 }
 
 export function getQualification(id: number) {

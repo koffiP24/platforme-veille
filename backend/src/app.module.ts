@@ -54,6 +54,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { rateLimitOptions } from './auth/rate-limit.config';
+import { AiAnalysisModule } from './ai/ai-analysis.module';
+import { WatchItemAiAnalysis } from './ai/entities/watch-item-ai-analysis.entity';
 
 @Module({
   imports: [
@@ -110,6 +112,7 @@ import { rateLimitOptions } from './auth/rate-limit.config';
         Notification,
         Report,
         AuditLog,
+        WatchItemAiAnalysis,
       ],
 
       synchronize: false,
@@ -137,6 +140,7 @@ import { rateLimitOptions } from './auth/rate-limit.config';
     ReportsModule,
     HealthModule,
     AuditModule,
+    AiAnalysisModule,
   ],
   providers: [
     {

@@ -8,6 +8,10 @@ export interface FollowUpAction {
   impact: string | null;
   decision: string | null;
   dueDate: string | null;
+  progressComment: string | null;
+  result: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
   status: string;
   createdAt: string;
   owner: { id: number; firstName?: string; lastName?: string; email: string };
@@ -37,6 +41,8 @@ export async function createAction(
     impact?: string;
     dueDate?: string;
     ownerId: number;
+    progressComment?: string;
+    result?: string;
   },
 ) {
   const response = await api.post(`/watch-items/${itemId}/actions`, payload);
@@ -54,6 +60,8 @@ export async function updateAction(
     impact?: string;
     decision?: string;
     dueDate?: string | null;
+    progressComment?: string;
+    result?: string;
   },
 ) {
   const response = await api.patch(`/actions/${id}`, payload);

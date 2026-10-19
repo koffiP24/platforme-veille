@@ -51,6 +51,7 @@ Ce README permet de **recréer et lancer le projet complet de A à Z à partir d
 - ExcelJS
 - PDFKit
 - Nodemailer
+- OpenAI API (analyse des veilles, facultative)
 - Vitest / Supertest
 
 ### Frontend
@@ -82,6 +83,8 @@ La plateforme comprend notamment :
 - journal des collectes ;
 - normalisation ;
 - traduction automatique vers le français avec l’API DeepL ;
+- analyse IA de la pertinence, résumé et impacts potentiels, avec relecture humaine facultative ;
+- analyse assistée par IA des informations (pertinence, résumé et impacts potentiels), avec relecture humaine facultative ;
 - filtrage par sujets à surveiller ;
 - déduplication ;
 - gestion des éléments de veille ;
@@ -123,6 +126,7 @@ plateforme_veille/
 ├── backend/
 │   ├── src/
 │   │   ├── actions/
+│   │   ├── ai/
 │   │   ├── audit/
 │   │   ├── auth/
 │   │   ├── collection/
@@ -374,6 +378,16 @@ Après le filtrage des sujets, chaque veille nouvelle ou modifiée (RSS, Atom, A
 Si la clé est absente, invalide, si le quota est épuisé ou si DeepL est indisponible, la collecte continue avec le texte d’origine. Une indisponibilité temporaire suspend les nouveaux appels pendant une minute ; une clé refusée ou un quota épuisé suspend les appels jusqu’au redémarrage du backend.
 
 Documentation : [clé et endpoints DeepL](https://developers.deepl.com/docs/getting-started/auth), [forfaits API](https://support.deepl.com/hc/en-us/articles/360021200939-DeepL-API-plans).
+
+---
+
+## Analyse assistée par IA — facultative
+
+Le module propose un score de pertinence sur 100, une justification, un résumé en français, des processus potentiellement concernés, des vérifications à envisager et une classification suggérée (type de veille, thèmes, domaines, mots-clés et laboratoire/service). Ces résultats restent des propositions distinctes de la qualification métier : un utilisateur habilité les relit, les corrige et les enregistre. La relecture est conservée dans l’historique et inscrite au journal d’audit. L’IA ne statue jamais sur la conformité du laboratoire.
+
+Les appels externes sont désactivés par défaut. Pour les activer, copier les variables de `backend/.env.example` dans `backend/.env`, renseigner `OPENAI_API_KEY`, puis définir `AI_ENABLED=true` et `AI_ALLOW_EXTERNAL_PROCESSING=true`. L’analyse automatique après collecte reste facultative (`AI_AUTO_ANALYZE=true`) ; sinon, l’analyse peut être lancée depuis l’écran de qualification. `OPENAI_MODEL` et `AI_LABORATORY_CONTEXT` sont configurables.
+
+L’analyse envoie au fournisseur le titre, le résumé disponibles, la langue d’origine, la catégorie de la source, les sujets configurés et le contexte de laboratoire. Le catalogue interne des thèmes, domaines, mots-clés et laboratoires reste local ; l’IA suggère des libellés textuels qui peuvent être rapprochés des options existantes dans l’écran. Les URL et les données de compte ne sont pas transmises. L’application demande une réponse sans conservation applicative (`store: false`), mais l’envoi reste un traitement externe : activer ces options seulement après validation des règles de confidentialité applicables. Les migrations `AddWatchItemAiAnalyses` et `AddAiClassification` créent les tables et champs nécessaires ; les exécuter avant le démarrage.
 
 ---
 

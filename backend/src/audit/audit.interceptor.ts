@@ -106,6 +106,7 @@ export class AuditInterceptor implements NestInterceptor {
       path.startsWith('/sources') ||
       path.startsWith('/taxonomy') ||
       path.startsWith('/actions') ||
+      /^\/watch-items\/\d+\/ai-analysis(?:\/\d+\/review)?$/.test(path) ||
       /^\/watch-items\/\d+\/(review|publish|archive|qualification)$/.test(path) ||
       /^\/connectors\/\d+\/(run|retry)$/.test(path)
     ) {

@@ -111,6 +111,27 @@ function queryNumber(value: unknown, fallback: number, min: number, max: number)
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
 }
 
+function querySortOrder(value: unknown): 'ASC' | 'DESC' {
+  return queryValue(value, 'DESC') === 'ASC' ? 'ASC' : 'DESC';
+}
+
+const sortableFields = new Set([
+  'publishedAt',
+  'collectedAt',
+  'relevance',
+  'criticality',
+  'title',
+  'sourceName',
+  'sourceType',
+  'summary',
+  'status',
+]);
+
+function querySortBy(value: unknown): string {
+  const field = queryValue(value, 'collectedAt');
+  return sortableFields.has(field) ? field : 'collectedAt';
+}
+
 const initialListQuery = route.query;
 
 
@@ -499,6 +520,9 @@ const filters =
     sourceType:
       queryValue(initialListQuery.sourceType),
 
+    addedOrder:
+      querySortOrder(initialListQuery.addedOrder),
+
     page:
       queryNumber(initialListQuery.page, 1, 1, 100000),
 
@@ -506,13 +530,10 @@ const filters =
       queryNumber(initialListQuery.limit, 20, 1, 100),
 
     sortBy:
-      queryValue(initialListQuery.sortBy, 'sourceType'),
+      querySortBy(initialListQuery.sortBy),
 
     sortOrder:
-      (queryValue(initialListQuery.sortOrder, 'DESC') === 'ASC' ? 'ASC' : 'DESC') as
-      'ASC'
-      |
-      'DESC',
+      querySortOrder(initialListQuery.addedOrder ?? initialListQuery.sortOrder),
 
     favoritesOnly:
       initialListQuery.favorites ===
@@ -526,6 +547,7 @@ function listStateQuery() {
     limit: String(filters.value.limit),
     sortBy: filters.value.sortBy,
     sortOrder: filters.value.sortOrder,
+    addedOrder: filters.value.addedOrder,
   };
 
   for (const key of ['q', 'status', 'criticality', 'watchType', 'sourceType'] as const) {
@@ -586,6 +608,12 @@ const sourceTypeOptions =
     'ATOM',
     'IMPORT_MANUEL',
   ]);
+
+
+const addedOrderOptions = [
+  { label: 'Du plus récent au plus ancien', value: 'DESC' },
+  { label: 'Du plus ancien au plus récent', value: 'ASC' },
+];
 
 
 const canQualify =
@@ -793,7 +821,18 @@ async function load() {
   try {
     const response =
       await searchWatchItems(
-        filters.value,
+        {
+          q: filters.value.q,
+          status: filters.value.status,
+          criticality: filters.value.criticality,
+          watchType: filters.value.watchType,
+          sourceType: filters.value.sourceType,
+          page: filters.value.page,
+          limit: filters.value.limit,
+          sortBy: filters.value.sortBy,
+          sortOrder: filters.value.sortOrder,
+          favoritesOnly: filters.value.favoritesOnly,
+        },
         searchController.signal,
       );
 
@@ -1117,6 +1156,11 @@ function applyView(
             .favoritesOnly,
         ),
   };
+  filters.value.sortBy = querySortBy(filters.value.sortBy);
+  filters.value.sortOrder = querySortOrder(filters.value.sortOrder);
+  filters.value.addedOrder = filters.value.sortBy === 'collectedAt'
+    ? filters.value.sortOrder
+    : querySortOrder(filters.value.addedOrder);
 }
 
 
@@ -1217,6 +1261,9 @@ function resetFilters() {
     sourceType:
       '',
 
+    addedOrder:
+      'DESC',
+
     page:
       1,
 
@@ -1224,7 +1271,7 @@ function resetFilters() {
       20,
 
     sortBy:
-      'sourceType',
+      'collectedAt',
 
     sortOrder:
       'DESC',
@@ -1232,6 +1279,15 @@ function resetFilters() {
     favoritesOnly:
       favoritesMode.value,
   };
+  filters.value.sortOrder = filters.value.addedOrder;
+}
+
+
+function changeAddedOrder(order: 'ASC' | 'DESC') {
+  filters.value.addedOrder = order;
+  filters.value.sortBy = 'collectedAt';
+  filters.value.sortOrder = order;
+  filters.value.page = 1;
 }
 
 
@@ -1316,6 +1372,7 @@ watch(
     filters.value.criticality,
     filters.value.watchType,
     filters.value.sourceType,
+    filters.value.addedOrder,
     filters.value.sortBy,
     filters.value.sortOrder,
     filters.value.favoritesOnly,
@@ -1435,6 +1492,14 @@ onBeforeUnmount(() => {
             <Select append-to="self" v-model="filters.sourceType
               " :options="sourceTypeOptions
                 " option-label="label" option-value="value" show-clear placeholder="Type de source" class="w-full" />
+          </div>
+
+
+          <div class="select-host">
+            <Select append-to="self" :model-value="filters.addedOrder" :options="addedOrderOptions"
+              option-label="label" option-value="value" class="w-full"
+              aria-label="Trier les éléments par date d’ajout"
+              @update:model-value="changeAddedOrder" />
           </div>
 
 
@@ -1980,7 +2045,7 @@ view in
   display: grid;
 
   grid-template-columns:
-    minmax(16rem, 2fr) repeat(3, minmax(10.5rem, 1fr));
+    minmax(16rem, 2fr) repeat(4, minmax(10.5rem, 1fr));
 
   gap:
     0.65rem;
@@ -2234,12 +2299,9 @@ view in
   white-space: normal;
 }
 
-@media (max-width: 1250px) {
+@media (max-width: 1500px) {
   .filters-grid {
-    grid-template-columns:
-      repeat(3,
-        minmax(0,
-          1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
