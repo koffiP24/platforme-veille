@@ -23,6 +23,7 @@ import { AuditService } from '../audit/audit.service';
 import { Source } from '../sources/entities/source.entity';
 import { ExternalItem } from '../connectors/interfaces/connector.interface';
 import ExcelJS from 'exceljs';
+import { PDFParse } from 'pdf-parse';
 import { extname } from 'path';
 
 interface ManualImportFile {
@@ -78,13 +79,14 @@ export class CollectionService {
       throw new BadRequestException('Cette source est désactivée.');
 
     const extension = extname(file.originalname).toLowerCase();
-    if (!['.csv', '.xlsx'].includes(extension)) {
-      throw new BadRequestException('Formats acceptés : CSV et XLSX.');
+    if (!['.csv', '.xlsx', '.pdf'].includes(extension)) {
+      throw new BadRequestException('Formats acceptés : PDF, CSV et XLSX.');
     }
-    const parsedRows =
-      extension === '.xlsx'
-        ? await this.readExcel(file.buffer)
-        : this.readCsv(file.buffer);
+    const parsedRows = extension === '.xlsx'
+      ? await this.readExcel(file.buffer)
+      : extension === '.csv'
+        ? this.readCsv(file.buffer)
+        : await this.readPdf(file.buffer);
     if (!parsedRows.length)
       throw new BadRequestException('Le fichier ne contient aucune donnée.');
     if (parsedRows.length > 5000)
@@ -239,6 +241,36 @@ export class CollectionService {
       rows.push(values);
     });
     return this.rowsToObjects(rows);
+  }
+
+  private async readPdf(buffer: Buffer): Promise<Array<Record<string, unknown>>> {
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const result = await parser.getText();
+      const blocks = result.text
+        .replace(/\u0000/g, '')
+        .split(/\f|\n\s*\n+/)
+        .map((block) => block.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !/^-- \d+ of \d+ --$/.test(line)))
+        .filter((lines) => lines.length > 0);
+      return blocks.map((lines, index) => {
+        const title = lines[0];
+        const urlIndex = lines.findIndex((line) => /^URL\s*:/i.test(line));
+        const dateIndex = lines.findIndex((line) => /^Date\s*:/i.test(line));
+        const summaryEnd = urlIndex >= 0 ? urlIndex : dateIndex >= 0 ? dateIndex : lines.length;
+        const summary = lines.slice(1, summaryEnd).join(' ').trim();
+        const url = urlIndex >= 0 ? lines[urlIndex].replace(/^URL\s*:\s*/i, '').trim() : '';
+        const date = dateIndex >= 0 ? lines[dateIndex].replace(/^Date\s*:\s*/i, '').trim() : '';
+        if (!title || (!summary && !url && !date)) {
+          throw new BadRequestException(`Bloc PDF ${index + 1} : titre ou contenu introuvable.`);
+        }
+        return { titre: title, resume: summary, url, date_publication: date };
+      });
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('Le PDF est illisible ou ne contient pas de texte exploitable.');
+    } finally {
+      await parser.destroy();
+    }
   }
 
   private rowsToObjects(rows: unknown[][]) {

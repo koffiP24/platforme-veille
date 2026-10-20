@@ -1117,12 +1117,12 @@ onMounted(
                                             ? 'Désactiver la source'
                                             : 'Activer la source'
                                             " :loading="busyId ===
-                                data.id
-                                " @click="
-                                changeStatus(
-                                    data,
-                                )
-                                ">
+                                                data.id
+                                                " @click="
+                                    changeStatus(
+                                        data,
+                                    )
+                                    ">
                                     <template #icon>
 
                                         <PauseCircleIcon v-if="
@@ -1171,7 +1171,7 @@ onMounted(
                     <Message severity="info" :closable="false
                         ">
                         Formats acceptés :
-                        CSV et XLSX,
+                        PDF, CSV et XLSX,
                         5 Mo maximum.
                     </Message>
 

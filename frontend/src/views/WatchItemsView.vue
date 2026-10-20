@@ -79,6 +79,7 @@ import type {
 import {
   createSource,
   createConnector,
+  importManualSource,
 } from '../services/sources.service';
 
 import {
@@ -144,6 +145,9 @@ const sourceSubmitting =
 const sourceError =
   ref('');
 
+const manualImportFile =
+  ref<File | null>(null);
+
 const createWithConnector =
   ref(true);
 
@@ -199,6 +203,21 @@ const sourceForm =
       true,
   });
 
+function applyManualSourceDefaults(sourceType: unknown) {
+  const value = typeof sourceType === 'string'
+    ? sourceType
+    : (sourceType as { value?: string } | null)?.value;
+  if (value !== 'IMPORT_MANUEL') return;
+  sourceForm.value.baseUrl = '';
+  sourceForm.value.frequency = '';
+  if (!sourceForm.value.name.trim()) sourceForm.value.name = 'Import manuel';
+  if (!sourceForm.value.category) sourceForm.value.category = 'AUTRE';
+}
+
+function selectManualImportFile(event: Event) {
+  manualImportFile.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+}
+
 
 watch(
   () =>
@@ -231,11 +250,7 @@ watch(
       sourceType ===
       'IMPORT_MANUEL'
     ) {
-      sourceForm.value.baseUrl =
-        '';
-
-      sourceForm.value.frequency =
-        '';
+      applyManualSourceDefaults(sourceType);
 
       targetQuery.value =
         '';
@@ -360,9 +375,15 @@ async function submitSource() {
       );
     }
 
+    if (sourceForm.value.sourceType === 'IMPORT_MANUEL' && manualImportFile.value) {
+      await importManualSource(response.data.id, manualImportFile.value);
+    }
+
 
     sourceDialogVisible.value =
       false;
+
+    manualImportFile.value = null;
 
 
     sourceForm.value = {
@@ -1916,7 +1937,7 @@ view in
                   " :options="optionsFr(
                     sourceCreationTypeOptions,
                   )
-                    " option-label="label" option-value="value" class="w-full" required />
+                    " option-label="label" option-value="value" class="w-full" required @update:model-value="applyManualSourceDefaults" @change="(event) => applyManualSourceDefaults(event.value)" />
               </div>
             </div>
 
@@ -1974,10 +1995,16 @@ view in
 
 
           <Message v-if="sourceForm.sourceType === 'IMPORT_MANUEL'" severity="info" :closable="false">
-            Après la création, utilisez le bouton Importer de la source pour charger un fichier CSV ou XLSX. Aucune
+            Après la création, utilisez le bouton Importer de la source pour charger un fichier CSV, XLSX ou PDF. Aucune
             collecte
             automatique ne sera lancée.
           </Message>
+
+          <div v-if="sourceForm.sourceType === 'IMPORT_MANUEL'">
+            <label for="watch-manual-import-file" class="mb-2 block">Fichier à importer</label>
+            <input id="watch-manual-import-file" type="file" accept=".pdf,.csv,.xlsx,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" @change="selectManualImportFile" />
+            <p class="helper-text">Pour un PDF, utilisez un bloc par veille avec une ligne vide entre les blocs.</p>
+          </div>
 
         </form>
 

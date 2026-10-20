@@ -42,7 +42,7 @@ export class ManualImportController {
     @UploadedFile() file: UploadedImportFile | undefined,
     @Req() request: AuthenticatedRequest,
   ) {
-    if (!file) throw new BadRequestException('Sélectionnez un fichier CSV ou XLSX.');
+    if (!file) throw new BadRequestException('Sélectionnez un fichier PDF, CSV ou XLSX.');
     return this.collectionService.importManual(sourceId, file, request.user.id);
   }
 }

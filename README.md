@@ -716,6 +716,26 @@ d’état et les informations de suivi sont conservés dans le journal d’audit
 
 La migration `AddActionProgressFields` doit être exécutée avant d’utiliser ces champs.
 
+### Import manuel de veilles
+
+Une source de type **Import manuel** peut recevoir directement un fichier CSV, XLSX ou
+PDF depuis la fenêtre de création de la source ou depuis le module Sources. Le fichier
+est ensuite traité comme une collecte manuelle : normalisation, détection des doublons,
+traduction éventuelle et enregistrement des éléments de veille.
+
+Pour un PDF, le texte doit être organisé en blocs séparés par une ligne vide. Chaque bloc
+contient le titre sur la première ligne, le résumé, puis les lignes `URL:` et `Date:` :
+
+```text
+Titre de la veille
+Résumé de la veille...
+URL: https://example.org/veille
+Date: 2026-10-20
+```
+
+Les PDF contenant plusieurs blocs sont acceptés. Les PDF scannés sans couche de texte
+exploitable doivent d’abord être convertis en PDF avec texte ou en CSV/XLSX.
+
 ---
 
 # Collecte automatique

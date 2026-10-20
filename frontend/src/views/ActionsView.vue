@@ -391,13 +391,13 @@ onMounted(
 
                 <DataTable :value="actions
                     " :loading="loading
-            " paginator :rows="10
-            " :rows-per-page-options="[
+                        " paginator :rows="10
+                " :rows-per-page-options="[
                 10,
                 20,
                 50,
             ]
-            ">
+                ">
 
                     <template #empty>
                         Aucune action de suivi enregistrée.
@@ -437,7 +437,7 @@ onMounted(
                             {{
                                 labelFr(
                                     data.actionType,
-                            )
+                                )
                             }}
                         </template>
                     </Column>
@@ -448,7 +448,7 @@ onMounted(
                             {{
                                 ownerName(
                                     data,
-                            )
+                                )
                             }}
                         </template>
                     </Column>
@@ -460,7 +460,7 @@ onMounted(
                                 {{
                                     formatDate(
                                         data.dueDate,
-                                )
+                                    )
                                 }}
                             </span>
                         </template>
@@ -473,9 +473,9 @@ onMounted(
                                 data.status,
                             )
                                 " :severity="statusSeverity(
-                    data.status,
-                )
-                    " />
+                                    data.status,
+                                )
+                                    " />
                         </template>
                     </Column>
 
@@ -483,11 +483,14 @@ onMounted(
                     <Column header="Détails du suivi" style="min-width: 17rem">
                         <template #body="{ data }">
                             <div class="action-follow-up">
-                                <span v-if="data.progressComment"><strong>Avancement :</strong> {{ data.progressComment }}</span>
+                                <span v-if="data.progressComment"><strong>Avancement :</strong> {{ data.progressComment
+                                    }}</span>
                                 <span v-if="data.result"><strong>Résultat :</strong> {{ data.result }}</span>
                                 <span v-if="data.startedAt">Début : {{ formatDate(data.startedAt) }}</span>
                                 <span v-if="data.completedAt">Clôture : {{ formatDate(data.completedAt) }}</span>
-                                <span v-if="!data.progressComment && !data.result && !data.startedAt && !data.completedAt" class="muted-follow-up">Aucun détail renseigné</span>
+                                <span
+                                    v-if="!data.progressComment && !data.result && !data.startedAt && !data.completedAt"
+                                    class="muted-follow-up">Aucun détail renseigné</span>
                             </div>
                         </template>
                     </Column>
@@ -499,28 +502,28 @@ onMounted(
                                 data.status ===
                                 'OPEN'
                             " label="Démarrer" size="small" :loading="updating.includes(
-                    data.id,
-                )
-                    " @click="
-                    updateStatus(
-                        data,
-                        'IN_PROGRESS',
-                    )
-                    " />
+                                data.id,
+                            )
+                                " @click="
+                        updateStatus(
+                            data,
+                            'IN_PROGRESS',
+                        )
+                        " />
 
 
                             <Button v-else-if="
                                 data.status ===
                                 'IN_PROGRESS'
                             " label="Terminer" size="small" severity="success" :loading="updating.includes(
-                    data.id,
-                )
-                    " @click="
-                    updateStatus(
-                        data,
-                        'DONE',
-                    )
-                    " />
+                                data.id,
+                            )
+                                " @click="
+                        updateStatus(
+                            data,
+                            'DONE',
+                        )
+                        " />
 
 
                             <span v-else class="completed-text">
@@ -537,20 +540,26 @@ onMounted(
         </div>
 
         <Dialog v-model:visible="finishDialog" modal header="Terminer l’action" class="w-full max-w-xl">
-            <p v-if="finishingAction">Renseignez les informations réalisées pour « {{ finishingAction.title }} » avant de confirmer sa clôture.</p>
+            <p v-if="finishingAction">Renseignez les informations réalisées pour « {{ finishingAction.title }} » avant
+                de
+                confirmer sa clôture.</p>
             <div class="finish-fields">
                 <div>
                     <label>Commentaire d’avancement</label>
-                    <Textarea v-model="finishProgressComment" rows="4" class="w-full" placeholder="Décrivez le travail effectué..." />
+                    <Textarea v-model="finishProgressComment" rows="4" class="w-full"
+                        placeholder="Décrivez le travail effectué..." />
                 </div>
                 <div>
                     <label>Résultat ou conclusion</label>
-                    <Textarea v-model="finishResult" rows="4" class="w-full" placeholder="Indiquez le résultat obtenu ou la conclusion..." />
+                    <Textarea v-model="finishResult" rows="4" class="w-full"
+                        placeholder="Indiquez le résultat obtenu ou la conclusion..." />
                 </div>
             </div>
             <template #footer>
                 <Button label="Annuler" severity="secondary" text @click="finishDialog = false" />
-                <Button label="Valider et terminer" icon="pi pi-check" severity="success" :loading="finishingAction ? updating.includes(finishingAction.id) : false" @click="confirmFinishAction" />
+                <Button label="Valider et terminer" icon="pi pi-check" severity="success"
+                    :loading="finishingAction ? updating.includes(finishingAction.id) : false"
+                    @click="confirmFinishAction" />
             </template>
         </Dialog>
 
@@ -559,11 +568,34 @@ onMounted(
 
 
 <style scoped>
-.finish-fields { display: grid; gap: 1rem; }
-.action-follow-up { display: grid; gap: .25rem; white-space: normal; font-size: .82rem; line-height: 1.35; }
-.action-follow-up span { overflow-wrap: anywhere; }
-.muted-follow-up { color: var(--app-text-secondary); }
-.finish-fields label { display: block; margin-bottom: .4rem; font-weight: 700; color: var(--app-text-secondary); }
+.finish-fields {
+    display: grid;
+    gap: 1rem;
+}
+
+.action-follow-up {
+    display: grid;
+    gap: .25rem;
+    white-space: normal;
+    font-size: .82rem;
+    line-height: 1.35;
+}
+
+.action-follow-up span {
+    overflow-wrap: anywhere;
+}
+
+.muted-follow-up {
+    color: var(--app-text-secondary);
+}
+
+.finish-fields label {
+    display: block;
+    margin-bottom: .4rem;
+    font-weight: 700;
+    color: var(--app-text-secondary);
+}
+
 .actions-page {
     display:
         grid;

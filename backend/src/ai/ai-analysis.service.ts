@@ -483,7 +483,7 @@ export class AiAnalysisService {
       throw new BadGatewayException('La réponse IA est vide ou inexploitable.');
     let data: AiResponse;
     try {
-      data = JSON.parse(raw) as AiResponse;
+      data = this.parseJsonResponse(raw) as AiResponse;
     } catch {
       throw new BadGatewayException(`La réponse IA n’est pas un JSON valide (fournisseur : ${provider}, modèle : ${model}).`);
     }
@@ -531,6 +531,18 @@ export class AiAnalysisService {
         rationale: data.classification.rationale.trim().slice(0, 2000),
       },
     };
+  }
+
+  private parseJsonResponse(raw: string): unknown {
+    const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+      throw new Error('JSON IA introuvable');
+    }
   }
 
   private buildProviderRequest(

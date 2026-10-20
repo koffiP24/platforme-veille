@@ -3,7 +3,9 @@ import {
   computed,
   onBeforeUnmount,
   onMounted,
+  nextTick,
   ref,
+  watch,
 } from 'vue';
 
 import {
@@ -52,6 +54,40 @@ function saveSidebarScroll(event: Event) {
     // Navigation remains usable when browser storage is unavailable.
   }
 }
+
+function rememberSidebarScroll() {
+  try {
+    if (sidebarMenu.value) {
+      sessionStorage.setItem(
+        SIDEBAR_SCROLL_KEY,
+        String(sidebarMenu.value.scrollTop),
+      );
+    }
+  } catch {
+    // Navigation remains usable when browser storage is unavailable.
+  }
+}
+
+async function restoreSidebarScroll() {
+  await nextTick();
+  window.requestAnimationFrame(() => {
+    try {
+      const savedPosition = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY));
+      if (Number.isFinite(savedPosition) && sidebarMenu.value) {
+        sidebarMenu.value.scrollTop = savedPosition;
+      }
+    } catch {
+      // Ignore unavailable browser storage.
+    }
+  });
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    void restoreSidebarScroll();
+  },
+);
 
 const hasFavorites = ref(false);
 const unreadNotifications = ref(0);
@@ -361,16 +397,7 @@ function updateNotificationCount(
 }
 
 onMounted(() => {
-  window.requestAnimationFrame(() => {
-    try {
-      const savedPosition = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY));
-      if (Number.isFinite(savedPosition) && sidebarMenu.value) {
-        sidebarMenu.value.scrollTop = savedPosition;
-      }
-    } catch {
-      // Ignore unavailable browser storage.
-    }
-  });
+  void restoreSidebarScroll();
 
   desktopViewportQuery = window.matchMedia('(min-width: 768px)');
   desktopViewportQuery.addEventListener('change', closeMenuWhenDesktop);
@@ -479,7 +506,7 @@ onBeforeUnmount(() => {
 
 
 
-      <nav ref="sidebarMenu" class="sidebar-menu" @scroll.passive="saveSidebarScroll">
+      <nav ref="sidebarMenu" class="sidebar-menu" @scroll.passive="saveSidebarScroll" @click.capture="rememberSidebarScroll">
 
         <RouterLink to="/" class="sidebar-item" exact-active-class="sidebar-item-active" @click="
           closeMobileMenu

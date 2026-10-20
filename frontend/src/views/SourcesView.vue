@@ -296,11 +296,21 @@ const editForm = ref({
     active: true,
 });
 
+function applyManualSourceDefaults(sourceType: unknown) {
+    const value = typeof sourceType === 'string'
+        ? sourceType
+        : (sourceType as { value?: string } | null)?.value;
+    if (value !== 'IMPORT_MANUEL') return;
+    form.value.baseUrl = '';
+    form.value.frequency = '';
+    if (!form.value.name.trim()) form.value.name = 'Import manuel';
+    if (!form.value.category) form.value.category = 'AUTRE';
+}
+
 watch(() => form.value.sourceType, (sourceType, previousType) => {
     if (sourceType === 'API') form.value.baseUrl = CROSSREF_API_URL;
     else if (sourceType === 'IMPORT_MANUEL') {
-        form.value.baseUrl = '';
-        form.value.frequency = '';
+        applyManualSourceDefaults(sourceType);
     }
     else if (previousType === 'API' && form.value.baseUrl === CROSSREF_API_URL) form.value.baseUrl = '';
 });
@@ -627,7 +637,7 @@ onMounted(() => {
                                     <template #icon><CogIcon size="0.9rem" /></template>
                                 </Button>
                                 <Button v-if="canImportManual && data.active && data.sourceType === 'IMPORT_MANUEL'"
-                                    aria-label="Importer un fichier" title="Importer un fichier CSV ou XLSX"
+                                    aria-label="Importer un fichier" title="Importer un fichier PDF, CSV ou XLSX"
                                     severity="secondary" size="small" rounded @click="openManualImport(data)">
                                     <template #icon><UploadIcon size="0.9rem" /></template>
                                 </Button>
@@ -677,11 +687,11 @@ onMounted(() => {
                     </p>
                     <Message v-if="importError" severity="error">{{ importError }}</Message>
                     <Message severity="info">
-                        Formats acceptés : CSV et XLSX, 5 Mo maximum. La première ligne doit contenir les noms des colonnes.
+                        Formats acceptés : PDF, CSV et XLSX, 5 Mo maximum. Pour un PDF, chaque veille doit respecter le modèle titre, résumé, URL et date séparés par une ligne vide.
                     </Message>
                     <div>
                         <label for="manual-import-file" class="required-label mb-2 block font-medium">Fichier à importer</label>
-                        <input id="manual-import-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        <input id="manual-import-file" type="file" accept=".pdf,.csv,.xlsx,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:font-medium"
                             :disabled="importing" required @change="selectImportFile" />
                     </div>
@@ -854,7 +864,7 @@ onMounted(() => {
                             <div class="select-host">
                               <Select append-to="self" v-model="form.sourceType
                                 " option-label="label" option-value="value" :options="optionsFr(sourceTypeOptions)
-                                    " class="w-full" required />
+                                    " class="w-full" required @update:model-value="applyManualSourceDefaults" @change="(event) => applyManualSourceDefaults(event.value)" />
                             </div>
                         </div>
 
@@ -888,7 +898,7 @@ onMounted(() => {
                             <label v-if="form.sourceType !== 'IMPORT_MANUEL'" for="with-connector">Créer aussi le connecteur de collecte</label>
                         </div>
                         <Message v-if="form.sourceType === 'IMPORT_MANUEL'" severity="info">
-                            Après la création, utilisez le bouton d’import dans la ligne de la source pour sélectionner un fichier CSV ou XLSX.
+                            Après la création, utilisez le bouton d’import dans la ligne de la source pour sélectionner un fichier PDF, CSV ou XLSX.
                         </Message>
                         <p v-if="createWithConnector && ['RSS', 'ATOM'].includes(form.sourceType)"
                             class="text-sm text-slate-500">
