@@ -121,6 +121,21 @@ export class NotificationsService {
       order: { createdAt: 'DESC' },
     });
   }
+
+  async notifyInApp(userIds: number[], title: string, message: string, watchItem?: WatchItem | null) {
+    const uniqueIds = [...new Set(userIds.filter((id) => Number.isInteger(id)))];
+    if (!uniqueIds.length) return [];
+    return this.repo.save(uniqueIds.map((userId) => this.repo.create({
+      title,
+      message,
+      channel: 'IN_APP',
+      status: 'SENT',
+      sentAt: new Date(),
+      readAt: null,
+      user: { id: userId } as any,
+      watchItem: watchItem ?? null,
+    })));
+  }
   async markAllRead(userId: number) {
     const result = await this.repo.createQueryBuilder()
       .update(Notification)

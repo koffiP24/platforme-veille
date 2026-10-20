@@ -881,8 +881,8 @@ onMounted(
                         <Dialog v-model:visible="rejectDialogVisible" modal :closable="!aiSaving"
                             :dismissable-mask="!aiSaving" header="Rejeter cette veille" class="ai-reject-dialog">
                             <p>Cette veille sera marquée comme rejetée. Le score IA proposé est de <strong>{{
-                                    aiDraft.relevanceScore
-                                    }}/100</strong>.</p>
+                                aiDraft.relevanceScore
+                            }}/100</strong>.</p>
                             <p class="ai-dialog-note">Le rejet est une décision humaine et sera enregistré dans le suivi
                                 ainsi que dans le
                                 journal d’audit.</p>
@@ -944,9 +944,9 @@ onMounted(
                                 <div class="select-host">
                                     <Select append-to="self" v-model="form.watchType
                                         " option-label="label" option-value="value" :options="optionsFr(
-                                        watchTypeOptions,
-                                    )
-                                        " class="w-full" />
+                                            watchTypeOptions,
+                                        )
+                                            " class="w-full" />
                                 </div>
                             </div>
 
@@ -976,8 +976,8 @@ onMounted(
                                 <Slider aria-label="Priorité globale" v-model="priorityScore
                                     " :min="0
                                         " :max="100
-                        " :step="1
-                        " class="w-full" />
+                                            " :step="1
+                            " class="w-full" />
 
 
                                 <div class="priority-scale">
@@ -1015,7 +1015,8 @@ onMounted(
                                 <div class="select-host">
                                     <MultiSelect append-to="self" v-model="form.domainIds
                                         " :options="domains
-                                        " option-label="name" option-value="id" filter placeholder="Sélectionner" class="w-full" />
+                                            " option-label="name" option-value="id" filter placeholder="Sélectionner"
+                                        class="w-full" />
                                 </div>
                             </div>
 
@@ -1028,7 +1029,8 @@ onMounted(
                                 <div class="select-host">
                                     <MultiSelect append-to="self" v-model="form.laboratoryIds
                                         " :options="laboratories
-                                        " option-label="name" option-value="id" filter placeholder="Sélectionner" class="w-full" />
+                                            " option-label="name" option-value="id" filter placeholder="Sélectionner"
+                                        class="w-full" />
                                 </div>
                             </div>
 
@@ -1041,7 +1043,8 @@ onMounted(
                                 <div class="select-host">
                                     <MultiSelect append-to="self" v-model="form.topicIds
                                         " :options="topics
-                                        " option-label="label" option-value="id" filter placeholder="Sélectionner" class="w-full" />
+                                            " option-label="label" option-value="id" filter placeholder="Sélectionner"
+                                        class="w-full" />
                                 </div>
                             </div>
 
@@ -1054,7 +1057,8 @@ onMounted(
                                 <div class="select-host">
                                     <MultiSelect append-to="self" v-model="form.keywordIds
                                         " :options="keywords
-                                        " option-label="label" option-value="id" filter placeholder="Sélectionner" class="w-full" />
+                                            " option-label="label" option-value="id" filter placeholder="Sélectionner"
+                                        class="w-full" />
                                 </div>
                             </div>
 

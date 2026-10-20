@@ -13,6 +13,7 @@ import { CreateActionDto } from './dto/create-action.dto';
 import { UpdateActionDto } from './dto/update-action.dto';
 import { WATCH_STATUS } from '../watch-items/constants/watch-status.constants';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ActionsService {
@@ -23,6 +24,7 @@ export class ActionsService {
     private readonly itemRepository: Repository<WatchItem>,
     @InjectRepository(User) private readonly userRepository: Repository<User>,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(itemId: number, dto: CreateActionDto, actor: { id: number; roles: string[] }) {
@@ -67,6 +69,12 @@ export class ActionsService {
       entityId: saved.id,
       afterValue: this.auditSnapshot(saved),
     });
+    await this.notificationsService.notifyInApp(
+      [owner.id],
+      'Nouvelle action attribuée',
+      `L’action « ${saved.title} » vous a été attribuée.`,
+      item,
+    );
     return saved;
   }
 
@@ -139,6 +147,26 @@ export class ActionsService {
     if (dto.progressComment !== undefined) action.progressComment = dto.progressComment.trim() || null;
     if (dto.result !== undefined) action.result = dto.result.trim() || null;
     const saved = await this.actionRepository.save(action);
+    if (dto.status === 'IN_PROGRESS') {
+      const admins = await this.userRepository.find({ relations: { roles: true } });
+      const adminIds = admins.filter((user) => user.status === 'ACTIVE' && user.roles.some((role) => role.name === 'ADMIN')).map((user) => user.id);
+      await this.notificationsService.notifyInApp(
+        adminIds,
+        'Action démarrée',
+        `L’action « ${saved.title} » a été démarrée par ${await this.userLabel(currentUser.id)}.`,
+        saved.watchItem,
+      );
+    }
+    if (dto.status === 'DONE') {
+      const admins = await this.userRepository.find({ relations: { roles: true } });
+      const adminIds = admins.filter((user) => user.status === 'ACTIVE' && user.roles.some((role) => role.name === 'ADMIN')).map((user) => user.id);
+      await this.notificationsService.notifyInApp(
+        [...adminIds, action.owner.id],
+        'Action terminée',
+        `L’action « ${saved.title} » est terminée.`,
+        saved.watchItem,
+      );
+    }
     await this.auditService.log({
       userId: currentUser.id,
       action: 'UPDATE_FOLLOW_UP_ACTION',
@@ -148,6 +176,11 @@ export class ActionsService {
       afterValue: this.auditSnapshot(saved),
     });
     return saved;
+  }
+
+  private async userLabel(userId: number) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    return user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Le responsable';
   }
 
   async countPendingForUser(userId: number) {

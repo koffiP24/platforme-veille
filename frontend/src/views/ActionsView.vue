@@ -480,6 +480,18 @@ onMounted(
                     </Column>
 
 
+                    <Column header="Détails du suivi" style="min-width: 17rem">
+                        <template #body="{ data }">
+                            <div class="action-follow-up">
+                                <span v-if="data.progressComment"><strong>Avancement :</strong> {{ data.progressComment }}</span>
+                                <span v-if="data.result"><strong>Résultat :</strong> {{ data.result }}</span>
+                                <span v-if="data.startedAt">Début : {{ formatDate(data.startedAt) }}</span>
+                                <span v-if="data.completedAt">Clôture : {{ formatDate(data.completedAt) }}</span>
+                                <span v-if="!data.progressComment && !data.result && !data.startedAt && !data.completedAt" class="muted-follow-up">Aucun détail renseigné</span>
+                            </div>
+                        </template>
+                    </Column>
+
                     <Column header="Mise à jour" style="width: 9rem">
                         <template #body="{ data }">
 
@@ -548,6 +560,9 @@ onMounted(
 
 <style scoped>
 .finish-fields { display: grid; gap: 1rem; }
+.action-follow-up { display: grid; gap: .25rem; white-space: normal; font-size: .82rem; line-height: 1.35; }
+.action-follow-up span { overflow-wrap: anywhere; }
+.muted-follow-up { color: var(--app-text-secondary); }
 .finish-fields label { display: block; margin-bottom: .4rem; font-weight: 700; color: var(--app-text-secondary); }
 .actions-page {
     display:
