@@ -701,6 +701,21 @@ Une veille peut déboucher sur une tâche concrète :
 - faire une étude d’impact ;
 - adapter un document qualité.
 
+Une action est affectée à un responsable et suit trois états : **À faire**, **En cours**
+et **Terminée**. Le responsable peut démarrer l’action lorsqu’il commence son travail.
+Lorsqu’il choisit **Terminer**, un formulaire lui permet de renseigner :
+
+- un commentaire d’avancement ;
+- le résultat ou la conclusion ;
+- la date de début et la date de clôture.
+
+La validation du formulaire clôture l’action et enregistre ces informations avec celle-ci.
+Les dates sont également renseignées automatiquement lors du passage à « En cours » et
+à « Terminée » lorsqu’elles ne sont pas déjà définies. L’affectation, les changements
+d’état et les informations de suivi sont conservés dans le journal d’audit.
+
+La migration `AddActionProgressFields` doit être exécutée avant d’utiliser ces champs.
+
 ---
 
 # Collecte automatique
