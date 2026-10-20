@@ -43,8 +43,13 @@ const auth = useAuthStore();
 const mobileMenuOpen = ref(false);
 const sidebarMenu = ref<HTMLElement | null>(null);
 const SIDEBAR_SCROLL_KEY = 'app-sidebar-scroll-top';
+let restoringSidebarScroll = false;
 
 function saveSidebarScroll(event: Event) {
+  if (restoringSidebarScroll) {
+    return;
+  }
+
   try {
     sessionStorage.setItem(
       SIDEBAR_SCROLL_KEY,
@@ -74,9 +79,14 @@ async function restoreSidebarScroll() {
     try {
       const savedPosition = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY));
       if (Number.isFinite(savedPosition) && sidebarMenu.value) {
+        restoringSidebarScroll = true;
         sidebarMenu.value.scrollTop = savedPosition;
+        window.requestAnimationFrame(() => {
+          restoringSidebarScroll = false;
+        });
       }
     } catch {
+      restoringSidebarScroll = false;
       // Ignore unavailable browser storage.
     }
   });
@@ -88,6 +98,12 @@ watch(
     void restoreSidebarScroll();
   },
 );
+
+// Capture la position juste avant toute navigation, quelle que soit
+// l'entrée utilisée (clic, clavier ou navigation programmée).
+router.beforeEach(() => {
+  rememberSidebarScroll();
+});
 
 const hasFavorites = ref(false);
 const unreadNotifications = ref(0);
