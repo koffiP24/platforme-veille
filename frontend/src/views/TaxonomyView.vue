@@ -115,6 +115,22 @@ const laboratories =
 const keywords =
   ref<Keyword[]>([]);
 
+const taxonomySearch = ref<Record<TaxonomyKind, string>>({
+  topics: '',
+  domains: '',
+  laboratories: '',
+  keywords: '',
+});
+
+function matchesTaxonomySearch(value: string, query: string) {
+  return !query.trim() || value.toLocaleLowerCase('fr').includes(query.trim().toLocaleLowerCase('fr'));
+}
+
+const filteredTopics = computed(() => topics.value.filter((item) => matchesTaxonomySearch(`${item.label} ${item.description ?? ''}`, taxonomySearch.value.topics)));
+const filteredDomains = computed(() => domains.value.filter((item) => matchesTaxonomySearch(`${item.name} ${item.description ?? ''}`, taxonomySearch.value.domains)));
+const filteredLaboratories = computed(() => laboratories.value.filter((item) => matchesTaxonomySearch(`${item.name} ${item.description ?? ''}`, taxonomySearch.value.laboratories)));
+const filteredKeywords = computed(() => keywords.value.filter((item) => matchesTaxonomySearch(`${item.label} ${item.weight}`, taxonomySearch.value.keywords)));
+
 
 const loading =
   ref(false);
@@ -1068,7 +1084,9 @@ onMounted(
                 </div>
 
 
-                  <DataTable :value="topics
+                  <InputText v-model="taxonomySearch.topics" placeholder="Rechercher un thème..." class="taxonomy-search" />
+
+                  <DataTable :value="filteredTopics
                   " :loading="loading
                     " paginator :rows="10
                       ">
@@ -1184,7 +1202,9 @@ onMounted(
                 </div>
 
 
-                <DataTable :value="domains
+                <InputText v-model="taxonomySearch.domains" placeholder="Rechercher un domaine..." class="taxonomy-search" />
+
+                <DataTable :value="filteredDomains
                   " :loading="loading
                     " paginator :rows="10
                       ">
@@ -1300,7 +1320,9 @@ onMounted(
                 </div>
 
 
-                <DataTable :value="laboratories
+                <InputText v-model="taxonomySearch.laboratories" placeholder="Rechercher un laboratoire..." class="taxonomy-search" />
+
+                <DataTable :value="filteredLaboratories
                   " :loading="loading
                     " paginator :rows="10
                       ">
@@ -1416,7 +1438,9 @@ onMounted(
                 </div>
 
 
-                <DataTable :value="keywords
+                <InputText v-model="taxonomySearch.keywords" placeholder="Rechercher un mot-clé..." class="taxonomy-search" />
+
+                <DataTable :value="filteredKeywords
                   " :loading="loading
                     " paginator :rows="10
                       ">

@@ -13,7 +13,6 @@ import {
 } from 'vue-router';
 
 import Button from 'primevue/button';
-import Checkbox from 'primevue/checkbox';
 import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
 import Dialog from 'primevue/dialog';
@@ -78,13 +77,8 @@ import type {
 
 import {
   createSource,
-  createConnector,
   importManualSource,
 } from '../services/sources.service';
-
-import {
-  buildConnectorConfig,
-} from '../services/connector-config';
 
 import {
   defaultSourceQuery,
@@ -148,8 +142,8 @@ const sourceError =
 const manualImportFile =
   ref<File | null>(null);
 
-const createWithConnector =
-  ref(true);
+const manualImportInput =
+  ref<HTMLInputElement | null>(null);
 
 const targetQuery =
   ref('');
@@ -215,7 +209,16 @@ function applyManualSourceDefaults(sourceType: unknown) {
 }
 
 function selectManualImportFile(event: Event) {
-  manualImportFile.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+  const input = event.target as HTMLInputElement;
+  const selected = input.files?.[0] ?? null;
+  sourceError.value = '';
+  if (selected && selected.size > 5 * 1024 * 1024) {
+    manualImportFile.value = null;
+    input.value = '';
+    sourceError.value = 'Le fichier dépasse la taille maximale de 5 Mo.';
+    return;
+  }
+  manualImportFile.value = selected;
 }
 
 
@@ -240,6 +243,10 @@ watch(
     sourceType,
     previousType,
   ) => {
+    if (sourceType !== 'IMPORT_MANUEL') {
+      manualImportFile.value = null;
+      if (manualImportInput.value) manualImportInput.value.value = '';
+    }
     if (
       sourceType ===
       'API'
@@ -329,30 +336,19 @@ async function submitSource() {
     return;
   }
 
+  if (sourceForm.value.sourceType === 'IMPORT_MANUEL' && !manualImportFile.value) {
+    sourceError.value = 'Sélectionnez un fichier CSV, XLSX ou PDF pour lancer l’import immédiatement.';
+    return;
+  }
+
   sourceSubmitting.value =
     true;
 
   sourceError.value =
     '';
 
+  let sourceCreated = false;
   try {
-    const config =
-      auth.isAdmin
-        &&
-        createWithConnector.value
-        &&
-        sourceForm.value.sourceType !==
-        'IMPORT_MANUEL'
-
-        ? buildConnectorConfig(
-          sourceForm.value.sourceType,
-          sourceForm.value.baseUrl,
-          targetQuery.value,
-        )
-
-        : null;
-
-
     const response =
       await createSource({
         ...sourceForm.value,
@@ -362,28 +358,22 @@ async function submitSource() {
             .trim()
           ||
           undefined,
+        query: sourceForm.value.sourceType === 'IMPORT_MANUEL'
+          ? undefined
+          : targetQuery.value,
       });
+    sourceCreated = true;
 
-
-    if (
-      config
-    ) {
-      await createConnector(
-        response.data.id,
-        response.data.sourceType,
-        config,
-      );
-    }
-
-    if (sourceForm.value.sourceType === 'IMPORT_MANUEL' && manualImportFile.value) {
-      await importManualSource(response.data.id, manualImportFile.value);
-    }
+    const importResult = sourceForm.value.sourceType === 'IMPORT_MANUEL' && manualImportFile.value
+      ? (await importManualSource(response.data.id, manualImportFile.value)).data
+      : null;
 
 
     sourceDialogVisible.value =
       false;
 
     manualImportFile.value = null;
+    if (manualImportInput.value) manualImportInput.value.value = '';
 
 
     sourceForm.value = {
@@ -416,30 +406,63 @@ async function submitSource() {
     targetQuery.value =
       '';
 
+    await load();
 
-    toast.add({
-      severity:
-        'success',
-
-      summary:
-        'Source créée',
-
-      detail:
-        'La source a été enregistrée.',
-
-      life:
-        4000,
-    });
+    if (importResult) {
+      toast.add({
+        severity: importResult.errors ? 'warn' : 'success',
+        summary: importResult.errors ? 'Source créée, import avec erreurs' : 'Source créée et importée',
+        detail: `${importResult.received} reçu(s) · ${importResult.created} créé(s) · ${importResult.updated} mis à jour · ${importResult.duplicates} doublon(s) · ${importResult.errors} erreur(s)`,
+        life: 12000,
+      });
+    } else if (response.data.initialCollection?.status === 'FAILED') {
+      toast.add({
+        severity: 'warn',
+        summary: 'Source créée, collecte échouée',
+        detail: response.data.initialCollection.message ?? 'La première collecte n’a pas abouti. Vous pourrez la relancer depuis la liste des sources.',
+        life: 10000,
+      });
+    } else if (response.data.initialCollection?.status === 'COMPLETED_WITH_ERRORS') {
+      const result = response.data.initialCollection;
+      toast.add({
+        severity: 'warn',
+        summary: 'Source créée, collecte avec erreurs',
+        detail: `${result.received ?? 0} reçu(s) · ${result.created ?? 0} créé(s) · ${result.updated ?? 0} mis à jour · ${result.duplicates ?? 0} doublon(s) · ${result.errors ?? 0} erreur(s)`,
+        life: 12000,
+      });
+    } else {
+      const result = response.data.initialCollection;
+      const skipped = result?.status === 'SKIPPED';
+      toast.add({
+        severity: result?.status === 'IN_PROGRESS' || skipped ? 'info' : 'success',
+        summary: result?.status === 'IN_PROGRESS'
+          ? 'Collecte en cours'
+          : skipped
+            ? 'Source inactive'
+            : 'Source créée et collectée',
+        detail: result?.status === 'COMPLETED'
+          ? `${result.received ?? 0} reçu(s) · ${result.created ?? 0} nouvel(le)(s) · ${result.duplicates ?? 0} doublon(s).`
+          : result?.message ?? 'La source a été enregistrée.',
+        life: 8000,
+      });
+    }
   } catch (
-  cause:
-    any
+  cause
   ) {
-    sourceError.value =
-      cause.response
-        ?.data
-        ?.message
-      ??
-      'Création impossible.';
+    const message = errorMessage(cause, 'La création de la source a échoué.');
+    if (sourceCreated) {
+      sourceDialogVisible.value = false;
+      manualImportFile.value = null;
+      if (manualImportInput.value) manualImportInput.value.value = '';
+      toast.add({
+        severity: 'warn',
+        summary: 'Source créée, import échoué',
+        detail: message,
+        life: 10000,
+      });
+    } else {
+      sourceError.value = message;
+    }
   } finally {
     sourceSubmitting.value =
       false;
@@ -1517,9 +1540,8 @@ onBeforeUnmount(() => {
 
 
           <div class="select-host">
-            <Select append-to="self" :model-value="filters.addedOrder" :options="addedOrderOptions"
-              option-label="label" option-value="value" class="w-full"
-              aria-label="Trier les éléments par date d’ajout"
+            <Select append-to="self" :model-value="filters.addedOrder" :options="addedOrderOptions" option-label="label"
+              option-value="value" class="w-full" aria-label="Trier les éléments par date d’ajout"
               @update:model-value="changeAddedOrder" />
           </div>
 
@@ -1594,16 +1616,16 @@ view in
                   50,
                 ]
                   " :total-records="total
-                  " :sort-field="filters.sortBy
-                  " :sort-order="filters.sortOrder ===
-                  'ASC'
-                  ? 1
-                  : -1
-                  " @page="
-                  changePage
-                " @sort="
-                changeSort
-              ">
+                    " :sort-field="filters.sortBy
+                    " :sort-order="filters.sortOrder ===
+                    'ASC'
+                    ? 1
+                    : -1
+                    " @page="
+                    changePage
+                  " @sort="
+                  changeSort
+                ">
 
           <template #empty>
             Aucun élément ne correspond aux critères sélectionnés.
@@ -1729,7 +1751,7 @@ view in
                     data.status,
                   )
                 " severity="secondary" rounded size="small" aria-label="Qualifier" title="Qualifier"
-                @click="openWatchItem(data.id, true)">
+                  @click="openWatchItem(data.id, true)">
                   <template #icon>
                     <CheckCircleIcon size="0.8rem" />
                   </template>
@@ -1937,7 +1959,9 @@ view in
                   " :options="optionsFr(
                     sourceCreationTypeOptions,
                   )
-                    " option-label="label" option-value="value" class="w-full" required @update:model-value="applyManualSourceDefaults" @change="(event) => applyManualSourceDefaults(event.value)" />
+                    " option-label="label" option-value="value" class="w-full" required
+                  @update:model-value="applyManualSourceDefaults"
+                  @change="(event) => applyManualSourceDefaults(event.value)" />
               </div>
             </div>
 
@@ -1995,25 +2019,23 @@ view in
 
 
           <Message v-if="sourceForm.sourceType === 'IMPORT_MANUEL'" severity="info" :closable="false">
-            Après la création, utilisez le bouton Importer de la source pour charger un fichier CSV, XLSX ou PDF. Aucune
-            collecte
-            automatique ne sera lancée.
+            Le fichier sélectionné sera importé immédiatement après la création de la source.
           </Message>
 
           <div v-if="sourceForm.sourceType === 'IMPORT_MANUEL'">
-            <label for="watch-manual-import-file" class="mb-2 block">Fichier à importer</label>
-            <input id="watch-manual-import-file" type="file" accept=".pdf,.csv,.xlsx,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" @change="selectManualImportFile" />
-            <p class="helper-text">Pour un PDF, utilisez un bloc par veille avec une ligne vide entre les blocs.</p>
+            <label for="watch-manual-import-file" class="required-label mb-2 block">Fichier à importer</label>
+            <input id="watch-manual-import-file" ref="manualImportInput" type="file"
+              required
+              accept=".pdf,.csv,.xlsx,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              @change="selectManualImportFile" />
+            <p class="helper-text">CSV, XLSX ou PDF · 5 Mo maximum. Pour un PDF, utilisez un bloc par veille avec une ligne vide entre les blocs.</p>
           </div>
 
         </form>
 
         <template #footer>
           <div class="source-dialog-footer">
-            <label v-if="auth.isAdmin && sourceForm.sourceType !== 'IMPORT_MANUEL'" class="source-connector-choice">
-              <Checkbox v-model="createWithConnector" binary />
-              <span>Créer aussi le connecteur de collecte</span>
-            </label>
             <div class="dialog-actions">
               <Button type="button" label="Annuler" severity="secondary" @click="sourceDialogVisible = false" />
               <Button type="submit" form="watch-source-form" label="Créer la source" :loading="sourceSubmitting" />

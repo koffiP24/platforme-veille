@@ -1823,25 +1823,28 @@ onMounted(
                                 }}
                             </p>
 
-                            <button
-                                v-if="summaryCanExpand"
-                                type="button"
-                                class="summary-toggle"
-                                :aria-expanded="summaryExpanded"
-                                @click="summaryExpanded = !summaryExpanded"
-                            >
-                                {{ summaryExpanded ? 'Voir moins' : 'Voir plus' }}
-                            </button>
+                            <div class="summary-actions">
+                                <button
+                                    v-if="summaryCanExpand"
+                                    type="button"
+                                    class="summary-toggle"
+                                    :aria-expanded="summaryExpanded"
+                                    @click="summaryExpanded = !summaryExpanded"
+                                >
+                                    {{ summaryExpanded ? 'Voir moins' : 'Voir plus' }}
+                                </button>
 
-
-                            <a v-if="
-                                safeExternalUrl(item.url)
-                            " :href="safeExternalUrl(item.url) ?? undefined
-                                " target="_blank" rel="noopener noreferrer" class="original-link">
-                                <i class="pi pi-external-link" />
-
-                                Consulter la source originale
-                            </a>
+                                <a
+                                    v-if="safeExternalUrl(item.url)"
+                                    :href="safeExternalUrl(item.url) ?? undefined"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="original-link"
+                                >
+                                    <i class="pi pi-external-link" aria-hidden="true" />
+                                    Consulter la source originale
+                                </a>
+                            </div>
 
                         </div>
 
@@ -2946,53 +2949,57 @@ onMounted(
     -webkit-line-clamp: unset;
 }
 
-.summary-toggle {
-    margin: 0.25rem 0 0.9rem;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--app-primary);
+.summary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
+    margin-top: 0.65rem;
+}
+
+.summary-toggle,
+.original-link {
+    display: inline-flex;
+    min-height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--app-border-strong);
+    border-radius: 0.65rem;
+    background: var(--app-surface-2);
     font: inherit;
     font-size: 0.78rem;
     font-weight: 700;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.summary-toggle {
+    color: var(--app-primary);
     cursor: pointer;
 }
 
 .summary-toggle:hover {
-    text-decoration: underline;
+    border-color: color-mix(in srgb, var(--app-primary) 45%, var(--app-border-strong));
+    background: color-mix(in srgb, var(--app-primary) 10%, var(--app-surface-2));
 }
-
 
 .original-link {
-    display:
-        inline-flex;
-
-    align-items:
-        center;
-
-    gap:
-        0.4rem;
-
-    margin-top:
-        1rem;
-
-    color:
-        var(--app-blue);
-
-    font-size:
-        0.72rem;
-
-    font-weight:
-        650;
-
-    text-decoration:
-        none;
+    color: var(--app-blue);
 }
 
-
 .original-link:hover {
-    color:
-        #93c5fd;
+    border-color: color-mix(in srgb, var(--app-blue) 45%, var(--app-border-strong));
+    background: color-mix(in srgb, var(--app-blue) 10%, var(--app-surface-2));
+    color: #93c5fd;
+}
+
+.summary-toggle:focus-visible,
+.original-link:focus-visible {
+    outline: 2px solid var(--app-primary);
+    outline-offset: 2px;
 }
 
 

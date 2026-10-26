@@ -83,6 +83,18 @@ const toast =
 const users =
   ref<UserRow[]>([]);
 
+const userSearch = ref('');
+
+const filteredUsers = computed(() => {
+  const query = userSearch.value.trim().toLocaleLowerCase('fr');
+  if (!query) return users.value;
+  return users.value.filter((user) =>
+    `${user.firstName} ${user.lastName} ${user.email} ${user.roles.map((role) => role.name).join(' ')}`
+      .toLocaleLowerCase('fr')
+      .includes(query),
+  );
+});
+
 const availableRoles =
   ref<UserRole[]>([]);
 
@@ -627,15 +639,17 @@ onMounted(
       <SectionCard title="Comptes utilisateurs" :subtitle="`${users.length} utilisateur${users.length > 1 ? 's' : ''} enregistré${users.length > 1 ? 's' : ''}`
         " icon="pi pi-address-book">
 
-        <DataTable :value="users
+        <InputText v-model="userSearch" placeholder="Rechercher un utilisateur..." class="user-search" />
+
+        <DataTable :value="filteredUsers
           " :loading="loading
             " data-key="id" paginator :rows="10
-            " :rows-per-page-options="[
+              " :rows-per-page-options="[
               10,
               20,
               50,
             ]
-            ">
+              ">
 
           <template #empty>
             Aucun utilisateur disponible.
@@ -719,17 +733,17 @@ onMounted(
                     data.id,
                   )
                     " :disabled="data.id ===
-                    auth.user?.id
-                    ||
-                    changingStatus.includes(
-                      data.id,
-                    )
-                    " @click="
-                    changeStatus(
-                      data.id,
-                      'INACTIVE',
-                    )
-                    " />
+                      auth.user?.id
+                      ||
+                      changingStatus.includes(
+                        data.id,
+                      )
+                      " @click="
+                      changeStatus(
+                        data.id,
+                        'INACTIVE',
+                      )
+                      " />
 
 
                 <Button v-else icon="pi pi-user-plus" severity="success" rounded size="small" aria-label="Réactiver"
@@ -737,14 +751,14 @@ onMounted(
                     data.id,
                   )
                     " :disabled="changingStatus.includes(
-                    data.id,
-                  )
-                    " @click="
-                    changeStatus(
                       data.id,
-                      'ACTIVE',
                     )
-                    " />
+                      " @click="
+                      changeStatus(
+                        data.id,
+                        'ACTIVE',
+                      )
+                      " />
 
               </div>
 
@@ -759,7 +773,7 @@ onMounted(
       <Dialog v-model:visible="roleDialogVisible
         " modal header="Modifier les rôles" class="w-full max-w-xl" :closable="!savingRoles
           " :close-on-escape="!savingRoles
-          ">
+            ">
 
         <form class="space-y-5" @submit.prevent="
           saveRoles
@@ -813,7 +827,7 @@ onMounted(
             selectedUser?.id ===
             auth.user?.id
           " severity="info" :closable="false
-              ">
+            ">
             Vous pouvez ajouter des rôles
             à votre compte mais vous devez
             conserver le rôle Administrateur.
@@ -839,7 +853,7 @@ onMounted(
       <Dialog v-model:visible="dialogVisible
         " modal header="Nouvel utilisateur" class="w-full max-w-xl" :closable="!creating
           " :close-on-escape="!creating
-          ">
+            ">
 
         <form class="space-y-4" autocomplete="off" @submit.prevent="
           createUser
@@ -893,7 +907,8 @@ onMounted(
 
             <Password v-model="form.password
               " :feedback="false
-                " :input-props="{ name: 'new-user-password', autocomplete: 'new-password' }" toggle-mask fluid required />
+                " :input-props="{ name: 'new-user-password', autocomplete: 'new-password' }" toggle-mask fluid
+              required />
 
             <div class="password-strength" :class="passwordStrength.className">
               <div class="password-strength-head">
@@ -1056,22 +1071,88 @@ onMounted(
     0.65rem;
 }
 
-.password-strength { margin-top: 0.65rem; padding: 0.75rem; border: 1px solid var(--app-border); border-radius: 0.75rem; background: var(--app-surface-2); }
-.password-strength-head { display: flex; justify-content: space-between; color: var(--app-text-muted); font-size: 0.7rem; }
-.password-meter { height: 0.3rem; margin-top: 0.45rem; overflow: hidden; border-radius: 999px; background: var(--app-surface-3); }
-.password-meter span { display: block; height: 100%; border-radius: inherit; transition: width 180ms ease, background 180ms ease; }
-.password-weak .password-meter span { background: #f87171; }
-.password-medium .password-meter span { background: #fbbf24; }
-.password-strong .password-meter span { background: #34d399; }
-.password-empty .password-meter span { background: var(--app-text-muted); }
-.password-weak .password-strength-head strong { color: #fca5a5; }
-.password-medium .password-strength-head strong { color: #fde68a; }
-.password-strong .password-strength-head strong { color: #6ee7b7; }
-.password-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.3rem 0.75rem; margin: 0.65rem 0 0; padding: 0; list-style: none; color: var(--app-text-muted); font-size: 0.68rem; }
-.password-rules li { display: flex; align-items: center; gap: 0.35rem; }
-.password-rules li.valid { color: #6ee7b7; }
+.password-strength {
+  margin-top: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  background: var(--app-surface-2);
+}
+
+.password-strength-head {
+  display: flex;
+  justify-content: space-between;
+  color: var(--app-text-muted);
+  font-size: 0.7rem;
+}
+
+.password-meter {
+  height: 0.3rem;
+  margin-top: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--app-surface-3);
+}
+
+.password-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 180ms ease, background 180ms ease;
+}
+
+.password-weak .password-meter span {
+  background: #f87171;
+}
+
+.password-medium .password-meter span {
+  background: #fbbf24;
+}
+
+.password-strong .password-meter span {
+  background: #34d399;
+}
+
+.password-empty .password-meter span {
+  background: var(--app-text-muted);
+}
+
+.password-weak .password-strength-head strong {
+  color: #fca5a5;
+}
+
+.password-medium .password-strength-head strong {
+  color: #fde68a;
+}
+
+.password-strong .password-strength-head strong {
+  color: #6ee7b7;
+}
+
+.password-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem 0.75rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--app-text-muted);
+  font-size: 0.68rem;
+}
+
+.password-rules li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.password-rules li.valid {
+  color: #6ee7b7;
+}
 
 @media (max-width: 640px) {
-  .password-rules { grid-template-columns: 1fr; }
+  .password-rules {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

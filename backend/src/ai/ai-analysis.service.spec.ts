@@ -7,11 +7,13 @@ describe('AiAnalysisService - configuration externe', () => {
   const analyses = { find: vi.fn(), findOne: vi.fn(), create: vi.fn(), save: vi.fn() };
   const items = { existsBy: vi.fn(), findOne: vi.fn() };
   const connectors = { findOne: vi.fn() };
+  const laboratories = { find: vi.fn() };
   const audit = { log: vi.fn() };
   const service = new AiAnalysisService(
     analyses as never,
     items as never,
     connectors as never,
+    laboratories as never,
     config as never,
     audit as never,
   );
@@ -57,5 +59,14 @@ describe('AiAnalysisService - configuration externe', () => {
     expect(items.findOne).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  it('supports automatic provider selection and comma-separated key pools', () => {
+    values.AI_ENABLED = 'true';
+    values.AI_ALLOW_EXTERNAL_PROCESSING = 'true';
+    values.AI_PROVIDER = 'auto';
+    values.AI_FALLBACK_PROVIDERS = 'gemini, claude, deepseek';
+    values.GEMINI_API_KEYS = ' first-key, second-key, first-key ';
+    expect(service.isEnabled()).toBe(true);
   });
 });

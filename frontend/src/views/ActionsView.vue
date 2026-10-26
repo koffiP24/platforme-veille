@@ -392,12 +392,12 @@ onMounted(
                 <DataTable :value="actions
                     " :loading="loading
                         " paginator :rows="10
-                " :rows-per-page-options="[
-                10,
-                20,
-                50,
-            ]
-                ">
+                            " :rows-per-page-options="[
+                    10,
+                    20,
+                    50,
+                ]
+                    ">
 
                     <template #empty>
                         Aucune action de suivi enregistrée.
@@ -484,7 +484,7 @@ onMounted(
                         <template #body="{ data }">
                             <div class="action-follow-up">
                                 <span v-if="data.progressComment"><strong>Avancement :</strong> {{ data.progressComment
-                                    }}</span>
+                                }}</span>
                                 <span v-if="data.result"><strong>Résultat :</strong> {{ data.result }}</span>
                                 <span v-if="data.startedAt">Début : {{ formatDate(data.startedAt) }}</span>
                                 <span v-if="data.completedAt">Clôture : {{ formatDate(data.completedAt) }}</span>
@@ -505,11 +505,11 @@ onMounted(
                                 data.id,
                             )
                                 " @click="
-                        updateStatus(
-                            data,
-                            'IN_PROGRESS',
-                        )
-                        " />
+                                    updateStatus(
+                                        data,
+                                        'IN_PROGRESS',
+                                    )
+                                    " />
 
 
                             <Button v-else-if="
@@ -519,11 +519,11 @@ onMounted(
                                 data.id,
                             )
                                 " @click="
-                        updateStatus(
-                            data,
-                            'DONE',
-                        )
-                        " />
+                                    updateStatus(
+                                        data,
+                                        'DONE',
+                                    )
+                                    " />
 
 
                             <span v-else class="completed-text">

@@ -44,6 +44,16 @@ interface AiResponse {
 }
 
 type AiProvider = 'openai' | 'gemini' | 'claude' | 'deepseek';
+const AI_PROVIDERS: AiProvider[] = ['openai', 'gemini', 'claude', 'deepseek'];
+
+interface AssessmentResult {
+  proposal: AiResponse;
+  provider: AiProvider;
+  model: string;
+  attempts: number;
+  durationMs: number;
+  fallbackReason?: string;
+}
 
 const DEFAULT_MODELS: Record<AiProvider, string> = {
   openai: 'gpt-4.1-mini',
@@ -124,6 +134,7 @@ export class AiAnalysisService {
   private readonly inFlightIds = new Set<number>();
   private activeJobs = 0;
   private readonly maxAutomaticJobs = 2;
+  private readonly keyIndexes = new Map<AiProvider, number>();
 
   constructor(
     @InjectRepository(WatchItemAiAnalysis)
@@ -138,11 +149,10 @@ export class AiAnalysisService {
   ) {}
 
   isEnabled(): boolean {
-    const provider = this.getProvider();
     return (
       this.config.get<string>('AI_ENABLED') === 'true' &&
       this.config.get<string>('AI_ALLOW_EXTERNAL_PROCESSING') === 'true' &&
-      Boolean(provider && this.getApiKey(provider))
+      this.getCandidateProviders().some((provider) => this.getApiKeys(provider).length > 0)
     );
   }
 
@@ -229,7 +239,7 @@ export class AiAnalysisService {
       });
       if (!force && latest?.sourceFingerprint === sourceFingerprint)
         return this.present(latest);
-      const proposal = await this.requestAssessment({
+      const assessment = await this.requestAssessment({
         title,
         summary,
         language: item.originalLanguage || item.language || 'inconnue',
@@ -237,15 +247,19 @@ export class AiAnalysisService {
         subjects,
         laboratoryCatalog,
       });
+      const proposal = assessment.proposal;
       const saved = await this.analyses.save(
         this.analyses.create({
           watchItem: item,
           supersedesId: latest?.id ?? null,
           requestedById: requestedById ?? null,
           reviewedById: null,
-          provider: this.getProvider()!,
-          model: this.getModel(this.getProvider()!),
+          provider: assessment.provider,
+          model: assessment.model,
           sourceFingerprint,
+          attempts: assessment.attempts,
+          durationMs: assessment.durationMs,
+          fallbackReason: assessment.attempts > 1 ? 'Basculement ou rotation de clé après un échec fournisseur.' : null,
           relevanceScore: proposal.relevanceScore,
           relevanceReason: proposal.relevanceReason,
           summary: proposal.summary,
@@ -359,12 +373,35 @@ export class AiAnalysisService {
 
   private getProvider(): AiProvider | null {
     const value = (this.config.get<string>('AI_PROVIDER') || 'openai').trim().toLowerCase();
-    return value === 'openai' || value === 'gemini' || value === 'claude' || value === 'deepseek' ? value : null;
+    return AI_PROVIDERS.includes(value as AiProvider) ? value as AiProvider : null;
+  }
+
+  private getCandidateProviders(): AiProvider[] {
+    const configured = (this.config.get<string>('AI_PROVIDER') || 'openai').trim().toLowerCase();
+    const values = configured === 'auto'
+      ? (this.config.get<string>('AI_FALLBACK_PROVIDERS') || AI_PROVIDERS.join(','))
+      : configured;
+    return values.split(',').map((value) => value.trim().toLowerCase())
+      .filter((value, index, list): value is AiProvider => AI_PROVIDERS.includes(value as AiProvider) && list.indexOf(value) === index);
+  }
+
+  private getApiKeys(provider: AiProvider): string[] {
+    const keyName = { openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', claude: 'ANTHROPIC_API_KEY', deepseek: 'DEEPSEEK_API_KEY' }[provider];
+    const keysName = { openai: 'OPENAI_API_KEYS', gemini: 'GEMINI_API_KEYS', claude: 'ANTHROPIC_API_KEYS', deepseek: 'DEEPSEEK_API_KEYS' }[provider];
+    const configured = [this.config.get<string>(keysName), this.config.get<string>(keyName)]
+      .filter((value): value is string => Boolean(value))
+      .flatMap((value) => value.split(','))
+      .map((value) => value.trim())
+      .filter(Boolean);
+    return [...new Set(configured)];
   }
 
   private getApiKey(provider: AiProvider): string {
-    const keyName = { openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', claude: 'ANTHROPIC_API_KEY', deepseek: 'DEEPSEEK_API_KEY' }[provider];
-    return this.config.get<string>(keyName)?.trim() || '';
+    const keys = this.getApiKeys(provider);
+    if (!keys.length) return '';
+    const index = this.keyIndexes.get(provider) ?? 0;
+    this.keyIndexes.set(provider, (index + 1) % keys.length);
+    return keys[index % keys.length];
   }
 
   private getModel(provider: AiProvider): string {
@@ -389,9 +426,49 @@ export class AiAnalysisService {
     category: string;
     subjects: string;
     laboratoryCatalog: string[];
-  }): Promise<AiResponse> {
-    const provider = this.getProvider();
-    if (!provider) throw new ServiceUnavailableException('Le fournisseur IA configuré est invalide.');
+  }): Promise<AssessmentResult> {
+    const startedAt = Date.now();
+    const candidates = this.getCandidateProviders().filter((provider) => this.getApiKeys(provider).length > 0);
+    if (!candidates.length) throw new ServiceUnavailableException('Aucun fournisseur IA configuré avec une clé valide.');
+    const manual = (this.config.get<string>('AI_PROVIDER') || '').trim().toLowerCase() !== 'auto';
+    const manualFailover = this.config.get<string>('AI_ALLOW_MANUAL_FAILOVER') === 'true';
+    let lastError: unknown;
+    let attempts = 0;
+    for (const provider of candidates) {
+      const maxKeys = Math.min(this.getApiKeys(provider).length, Number(this.config.get<string>('AI_MAX_KEY_ATTEMPTS')) || 2);
+      for (let keyAttempt = 0; keyAttempt < maxKeys; keyAttempt++) {
+        attempts++;
+        try {
+          const proposal = await this.requestAssessmentForProvider(input, provider);
+          return { proposal, provider, model: this.getModel(provider), attempts, durationMs: Date.now() - startedAt };
+        } catch (error) {
+          lastError = error;
+          const providerStatus = (error as { providerStatus?: number })?.providerStatus;
+          const canTryAnotherKey = providerStatus === 401 || providerStatus === 403;
+          if (!canTryAnotherKey && (!this.isFailoverError(error) || (manual && !manualFailover))) throw error;
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new BadGatewayException('Tous les fournisseurs IA ont échoué.');
+  }
+
+  private isFailoverError(error: unknown): boolean {
+    const providerStatus = (error as { providerStatus?: number })?.providerStatus;
+    if (providerStatus !== undefined) {
+      return providerStatus === 402 || providerStatus === 408 || providerStatus === 429 || providerStatus >= 500;
+    }
+    const status = (error as { getStatus?: () => number })?.getStatus?.();
+    return !status || status === 402 || status === 408 || status === 429 || status >= 500;
+  }
+
+  private async requestAssessmentForProvider(input: {
+    title: string;
+    summary: string;
+    language: string;
+    category: string;
+    subjects: string;
+    laboratoryCatalog: string[];
+  }, provider: AiProvider): Promise<AiResponse> {
     const apiKey = this.getApiKey(provider);
     const model = this.getModel(provider);
     const timeout =
@@ -426,44 +503,42 @@ export class AiAnalysisService {
     }
     if (!response.ok) {
       const providerError = (await response.json().catch(() => null)) as {
-        error?: { code?: unknown; type?: unknown; status?: unknown; message?: unknown };
-        message?: unknown;
+        error?: {
+          code?: string | number;
+          type?: string;
+          status?: string;
+          message?: string;
+          param?: string;
+        };
+        message?: string;
       } | null;
-      const providerCode = [providerError?.error?.code, providerError?.error?.status]
-        .find((value) => typeof value === 'string') as string | undefined;
-      const providerType = [providerError?.error?.type, providerError?.error?.message, providerError?.message]
-        .find((value) => typeof value === 'string') as string | undefined;
-      const quotaErrorCodes = new Set([
-        'insufficient_quota',
-        'credit_balance_exhausted',
-        'organization_usage_limit_exceeded',
-        'organization_spend_limit_exceeded',
-        'project_spend_limit_exceeded',
-      ]);
-      const errorDetails = `${providerCode || ''} ${providerType || ''}`.toLowerCase();
-      const isQuotaError =
-        quotaErrorCodes.has(providerCode || '') || quotaErrorCodes.has(providerType || '') ||
-        /quota|billing|credit balance|spend limit/.test(errorDetails);
+      const errorDetails = providerError?.error;
+      const providerCode = errorDetails?.code ?? errorDetails?.status ?? 'inconnu';
+      const providerType = errorDetails?.type ?? 'inconnu';
+      const providerMessage =
+        errorDetails?.message ?? providerError?.message ?? 'Aucun détail fourni';
+      const providerParam = errorDetails?.param ?? 'non précisé';
+
       this.logger.warn(
-        `Réponse IA refusée par le fournisseur (HTTP ${response.status}, type=${providerType}, code=${providerCode}).`,
+        `Erreur fournisseur IA : provider=${provider}, model=${model}, ` +
+          `HTTP=${response.status}, type=${providerType}, code=${providerCode}, ` +
+          `param=${providerParam}, message=${String(providerMessage).slice(0, 800)}`,
       );
       let message = 'Le fournisseur IA n’a pas pu traiter cette veille.';
       if (response.status === 401 || response.status === 403) {
         message = 'Le fournisseur IA refuse la clé ou ses autorisations. Vérifiez la clé API et le projet associé.';
-      } else if ((response.status === 429 || response.status === 402) && isQuotaError) {
-        message = 'Le quota de dépense ou le crédit du compte IA est épuisé. Vérifiez la facturation et les limites de l’organisation et du projet API.';
-      } else if (response.status === 429) {
-        message = 'La limite de requêtes du fournisseur IA est atteinte. Réessayez dans quelques instants.';
+      } else if (response.status === 429 || response.status === 402) {
+        message = 'Le fournisseur IA a refusé la requête en raison d’une limite ou d’un problème de facturation. Vérifiez le détail dans le terminal.';
       } else if (response.status === 400) {
-        message = 'Le fournisseur IA a rejeté la requête. Vérifiez le modèle configuré et les paramètres de l’analyse.';
+        message = 'Le fournisseur IA a rejeté la requête. Consultez le détail dans le terminal du backend.';
       } else if (response.status === 404) {
         message = 'Le modèle IA configuré est introuvable ou indisponible pour ce projet.';
       } else if (response.status >= 500) {
         message = 'Le fournisseur IA rencontre une panne temporaire. Réessayez plus tard.';
       }
-      throw new BadGatewayException(
-        message,
-      );
+      const providerFailure = new BadGatewayException(message) as BadGatewayException & { providerStatus?: number };
+      providerFailure.providerStatus = response.status;
+      throw providerFailure;
     }
     const payload = (await response.json()) as {
       output_text?: string;
@@ -603,9 +678,6 @@ export class AiAnalysisService {
       body: {
         model, max_tokens: 1200, system: INSTRUCTIONS,
         messages: [{ role: 'user', content: inputText }],
-        output_config: {
-          format: { type: 'json_schema', schema: this.schemaWithoutNumericConstraints(RESPONSE_SCHEMA) },
-        },
       },
     };
   }
@@ -649,6 +721,9 @@ export class AiAnalysisService {
       supersedesId: row.supersedesId,
       provider: row.provider,
       model: row.model,
+      attempts: row.attempts,
+      durationMs: row.durationMs,
+      fallbackReason: row.fallbackReason,
       relevanceScore: row.relevanceScore,
       relevanceReason: row.relevanceReason,
       summary: row.summary,

@@ -99,16 +99,14 @@ watch(
   },
 );
 
-// Capture la position juste avant toute navigation, quelle que soit
-// l'entrée utilisée (clic, clavier ou navigation programmée).
-router.beforeEach(() => {
-  rememberSidebarScroll();
-});
-
 const hasFavorites = ref(false);
 const unreadNotifications = ref(0);
 const notificationDrawerOpen = ref(false);
 const pendingActions = ref(0);
+
+watch(hasFavorites, () => {
+  void restoreSidebarScroll();
+});
 
 let notificationRefreshTimer:
   ReturnType<typeof setInterval> | undefined;

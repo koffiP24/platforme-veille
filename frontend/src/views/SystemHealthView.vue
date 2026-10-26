@@ -926,14 +926,14 @@ onMounted(
 
                 <DataTable :value="filteredRows
                     " :loading="loading
-                        " data-key="id">
+                        " data-key="id" sort-mode="single">
 
                     <template #empty>
                         Aucune source ne correspond à la recherche.
                     </template>
 
 
-                    <Column header="Source" style="min-width: 12rem">
+                    <Column field="name" header="Source" sortable style="min-width: 12rem">
                         <template #body="{ data }">
                             <div class="source-info">
                                 <strong>
@@ -954,7 +954,7 @@ onMounted(
                     </Column>
 
 
-                    <Column header="Type" style="width: 8rem">
+                    <Column field="sourceType" header="Type" sortable style="width: 8rem">
                         <template #body="{ data }">
                             <SourceTypeBadge :type="data.sourceType
                                 " />
@@ -962,7 +962,7 @@ onMounted(
                     </Column>
 
 
-                    <Column header="Catégorie" style="width: 10rem">
+                    <Column field="category" header="Catégorie" sortable style="width: 10rem">
                         <template #body="{ data }">
                             {{
                                 labelFr(
@@ -973,7 +973,7 @@ onMounted(
                     </Column>
 
 
-                    <Column header="État" style="width: 10rem">
+                    <Column field="connectorStatus" header="État" sortable style="width: 10rem">
                         <template #body="{ data }">
 
                             <div class="status-stack">
@@ -1002,7 +1002,7 @@ onMounted(
                     </Column>
 
 
-                    <Column header="Dernière synchronisation" style="width: 11rem">
+                    <Column field="lastSyncAt" header="Dernière synchronisation" sortable style="width: 11rem">
                         <template #body="{ data }">
                             <span class="sync-date">
                                 {{

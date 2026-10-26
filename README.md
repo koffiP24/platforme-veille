@@ -595,13 +595,13 @@ Sujet :
 environmental monitoring, water, pollution, soil, laboratory
 ```
 
-Après création :
+Après avoir cliqué sur **Créer la source**, une première collecte démarre automatiquement.
+Vérifier le résultat dans le journal de collecte, puis consulter les veilles créées. Si
+la collecte échoue, corriger la configuration de la source et la relancer depuis
+**Administration et santé des sources**.
 
-1. aller dans **Administration et santé des sources** ;
-2. tester le connecteur ;
-3. lancer la collecte ;
-4. vérifier le journal de collecte ;
-5. aller dans **Veilles**.
+Le test du connecteur reste disponible dans **Administration et santé des sources** pour
+vérifier une configuration sans lancer une collecte.
 
 ---
 
@@ -718,10 +718,11 @@ La migration `AddActionProgressFields` doit être exécutée avant d’utiliser 
 
 ### Import manuel de veilles
 
-Une source de type **Import manuel** peut recevoir directement un fichier CSV, XLSX ou
-PDF depuis la fenêtre de création de la source ou depuis le module Sources. Le fichier
-est ensuite traité comme une collecte manuelle : normalisation, détection des doublons,
-traduction éventuelle et enregistrement des éléments de veille.
+Pour créer une source de type **Import manuel**, sélectionner un fichier CSV, XLSX ou PDF
+dans la fenêtre de création : l’import démarre immédiatement après la création. Un fichier
+peut également être importé plus tard depuis le module Sources. Il est traité comme une
+collecte manuelle : normalisation, détection des doublons, traduction éventuelle et
+enregistrement des éléments de veille.
 
 Pour un PDF, le texte doit être organisé en blocs séparés par une ligne vide. Chaque bloc
 contient le titre sur la première ligne, le résumé, puis les lignes `URL:` et `Date:` :
@@ -1182,3 +1183,24 @@ http://localhost:5173
 La plateforme sert à **ne pas rater les informations importantes pour le laboratoire**, à les centraliser et à les transformer, lorsque nécessaire, en décisions et actions traçables.
 
 > Elle centralise tout le cycle de veille du laboratoire, depuis la collecte de l’information jusqu’à sa qualification, sa validation, sa diffusion et son suivi.
+# Configuration multi-IA
+
+Le backend conserve les fournisseurs OpenAI, Gemini, Claude et DeepSeek. `AI_PROVIDER` peut contenir un fournisseur précis ou `auto`. En mode `auto`, l’ordre de basculement est défini par `AI_FALLBACK_PROVIDERS`.
+
+Chaque fournisseur accepte l’ancienne variable singulière (`*_API_KEY`) et une liste séparée par des virgules (`*_API_KEYS`). Les listes sont nettoyées, dédupliquées et utilisées avec une rotation contrôlée. `AI_MAX_KEY_ATTEMPTS` limite les clés essayées pour une analyse. Les clés restent uniquement dans l’environnement et ne sont jamais écrites en base ou dans les logs.
+
+Le basculement est réservé aux erreurs réseau, délais d’attente, HTTP 402/429 et erreurs HTTP 5xx. Les erreurs 401 et 403 essaient d’abord les autres clés du même fournisseur ; si elles échouent toutes, la configuration est signalée. Les erreurs 400 ne sont pas relancées aveuglément. Un résultat accepté est toujours validé par le schéma interne avant d’être enregistré, et l’analyse conserve le fournisseur et le modèle réellement utilisés.
+
+Exemple de mode automatique (sans secret réel) :
+
+```dotenv
+AI_PROVIDER=auto
+AI_FALLBACK_PROVIDERS=gemini,claude,deepseek,openai
+AI_MAX_KEY_ATTEMPTS=2
+GEMINI_API_KEYS=cle_1,cle_2
+ANTHROPIC_API_KEY=
+DEEPSEEK_API_KEY=
+OPENAI_API_KEY=
+```
+
+Pour tester un basculement, configurez un fournisseur prioritaire avec une clé volontairement invalide dans un environnement de test, un fournisseur suivant avec une clé valide, puis lancez une analyse. N’utilisez jamais de vraie clé dans le dépôt et ne testez pas la rotation pour contourner les quotas d’un même projet.

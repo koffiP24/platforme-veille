@@ -21,6 +21,17 @@ export interface Source {
 
     config?: Record<string, unknown> | null;
   }[];
+  initialCollection?: InitialCollectionSummary;
+}
+
+export interface InitialCollectionSummary {
+  status: 'COMPLETED' | 'COMPLETED_WITH_ERRORS' | 'IN_PROGRESS' | 'FAILED' | 'SKIPPED';
+  received?: number;
+  created?: number;
+  updated?: number;
+  duplicates?: number;
+  errors?: number;
+  message?: string;
 }
 
 export function updateConnector(
@@ -38,6 +49,7 @@ export interface CreateSourcePayload {
   country?: string;
   category: string;
   sourceType: string;
+  query?: string;
   baseUrl?: string;
   frequency?: string;
   active?: boolean;

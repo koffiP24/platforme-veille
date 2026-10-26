@@ -16,7 +16,6 @@ import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
 import Tag from 'primevue/tag';
 import Message from 'primevue/message';
-import Checkbox from 'primevue/checkbox';
 import CheckCircleIcon from '@primeicons/vue/check-circle';
 import CogIcon from '@primeicons/vue/cog';
 import ExternalLinkIcon from '@primeicons/vue/external-link';
@@ -131,8 +130,9 @@ const statusError = ref('');
 const changingStatus = ref<number[]>([]);
 const busyConnectors = ref<number[]>([]);
 const collectingConnectors = ref<number[]>([]);
-const createWithConnector = ref(true);
 const submitting = ref(false);
+const newSourceFile = ref<File | null>(null);
+const newSourceImportInput = ref<HTMLInputElement | null>(null);
 const editDialogVisible = ref(false);
 const editingSource = ref<Source | null>(null);
 const editError = ref('');
@@ -307,7 +307,24 @@ function applyManualSourceDefaults(sourceType: unknown) {
     if (!form.value.category) form.value.category = 'AUTRE';
 }
 
+function selectNewSourceFile(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const selected = input.files?.[0] ?? null;
+    error.value = '';
+    if (selected && selected.size > 5 * 1024 * 1024) {
+        newSourceFile.value = null;
+        input.value = '';
+        error.value = 'Le fichier dépasse la taille maximale de 5 Mo.';
+        return;
+    }
+    newSourceFile.value = selected;
+}
+
 watch(() => form.value.sourceType, (sourceType, previousType) => {
+    if (sourceType !== 'IMPORT_MANUEL') {
+        newSourceFile.value = null;
+        if (newSourceImportInput.value) newSourceImportInput.value.value = '';
+    }
     if (sourceType === 'API') form.value.baseUrl = CROSSREF_API_URL;
     else if (sourceType === 'IMPORT_MANUEL') {
         applyManualSourceDefaults(sourceType);
@@ -409,35 +426,31 @@ async function loadFeedItems() {
 
 async function submit() {
     if (!canCreateSource.value || submitting.value) return;
+    if (form.value.sourceType === 'IMPORT_MANUEL' && !newSourceFile.value) {
+        error.value = 'Sélectionnez un fichier CSV, XLSX ou PDF pour lancer l’import immédiatement.';
+        return;
+    }
     error.value = '';
     statusError.value = '';
     submitting.value = true;
+    let sourceCreated = false;
 
     try {
-        const config = auth.isAdmin && createWithConnector.value && form.value.sourceType !== 'IMPORT_MANUEL'
-            ? buildConnectorConfig(form.value.sourceType, form.value.baseUrl, crossrefQuery.value)
-            : null;
         const response = await createSource({
             ...form.value,
             baseUrl: form.value.baseUrl.trim() || undefined,
+            query: form.value.sourceType === 'IMPORT_MANUEL' ? undefined : crossrefQuery.value,
         });
+        sourceCreated = true;
+        let importResult: Awaited<ReturnType<typeof importManualSource>>['data'] | undefined;
+        if (form.value.sourceType === 'IMPORT_MANUEL' && newSourceFile.value) {
+            importResult = (await importManualSource(response.data.id, newSourceFile.value)).data;
+        }
 
         dialogVisible.value = false;
-
-        if (config) {
-            try {
-                await createConnector(response.data.id, response.data.sourceType, config);
-            } catch (err: unknown) {
-                statusError.value = `Source créée (#${response.data.id}), mais connecteur non confirmé : ${errorMessage(err)} Utilisez « Configurer » après actualisation.`;
-                toast.add({
-                    severity: 'warn',
-                    summary: 'Source créée sans connecteur',
-                    detail: statusError.value,
-                    life: 8000,
-                });
-            }
-        }
         crossrefQuery.value = '';
+        newSourceFile.value = null;
+        if (newSourceImportInput.value) newSourceImportInput.value.value = '';
 
         form.value = {
             name: '',
@@ -451,11 +464,76 @@ async function submit() {
         };
 
         await loadSources();
-        actionSuccess(toast, 'Source créée', `La source « ${response.data.name} » a été enregistrée.`);
+        if (importResult) {
+            await loadFeedItems();
+            toast.add({
+                severity: importResult.errors ? 'warn' : 'success',
+                summary: importResult.errors ? 'Source créée, import avec erreurs' : 'Source créée et importée',
+                detail: `${importResult.received} reçu(s) · ${importResult.created} créé(s) · ${importResult.updated} mis à jour · ${importResult.duplicates} doublon(s) · ${importResult.errors} erreur(s)`,
+                life: 12000,
+            });
+        } else if (response.data.initialCollection?.status === 'FAILED') {
+            toast.add({
+                severity: 'warn',
+                summary: 'Source créée, collecte échouée',
+                detail: response.data.initialCollection.message ?? 'La première collecte n’a pas abouti. Vous pourrez la relancer depuis la liste des sources.',
+                life: 10000,
+            });
+        } else if (response.data.initialCollection?.status === 'COMPLETED_WITH_ERRORS') {
+            const result = response.data.initialCollection;
+            toast.add({
+                severity: 'warn',
+                summary: 'Source créée, collecte avec erreurs',
+                detail: `${result.received ?? 0} reçu(s) · ${result.created ?? 0} créé(s) · ${result.updated ?? 0} mis à jour · ${result.duplicates ?? 0} doublon(s) · ${result.errors ?? 0} erreur(s)`,
+                life: 12000,
+            });
+        } else if (response.data.initialCollection?.status === 'IN_PROGRESS') {
+            toast.add({
+                severity: 'info',
+                summary: 'Collecte en cours',
+                detail: response.data.initialCollection.message ?? 'La première collecte est déjà en cours.',
+                life: 8000,
+            });
+        } else if (response.data.initialCollection?.status === 'SKIPPED') {
+            toast.add({
+                severity: 'info',
+                summary: 'Source inactive',
+                detail: response.data.initialCollection.message ?? 'La collecte sera lancée lorsque la source sera activée.',
+                life: 8000,
+            });
+        } else {
+            const result = response.data.initialCollection;
+            actionSuccess(
+                toast,
+                'Source créée et collectée',
+                result?.status === 'COMPLETED'
+                    ? `${result.received ?? 0} reçu(s) · ${result.created ?? 0} nouvel(le)(s) · ${result.duplicates ?? 0} doublon(s).`
+                    : result?.message ?? `La source « ${response.data.name} » a été enregistrée.`,
+            );
+        }
     } catch (err: unknown) {
-        if (dialogVisible.value) error.value = errorMessage(err);
-        else statusError.value = 'Source créée, mais actualisation impossible. Rechargez la page.';
-        actionError(toast, err, 'Création impossible', 'La source n’a pas pu être créée.');
+        if (sourceCreated) {
+            dialogVisible.value = false;
+            const sourceName = form.value.name;
+            form.value = {
+                name: '',
+                organization: '',
+                country: '',
+                category: '',
+                sourceType: '',
+                baseUrl: '',
+                frequency: '',
+                active: true,
+            };
+            newSourceFile.value = null;
+            if (newSourceImportInput.value) newSourceImportInput.value.value = '';
+            statusError.value = `Source « ${sourceName} » créée, mais l’import ou l’actualisation n’a pas abouti : ${errorMessage(err)}`;
+            actionError(toast, err, 'Source créée, collecte/import échoué', statusError.value);
+            await loadSources();
+        } else {
+            error.value = errorMessage(err);
+            actionError(toast, err, 'Création impossible', 'La source n’a pas pu être créée.');
+        }
     } finally {
         submitting.value = false;
     }
@@ -880,42 +958,40 @@ onMounted(() => {
                     </div>
 
                     <div v-if="form.sourceType !== 'IMPORT_MANUEL'">
-                        <label class="mb-2 block" :class="{ 'required-label': createWithConnector && form.sourceType !== 'IMPORT_MANUEL' }">
+                        <label class="required-label mb-2 block">
                             Adresse de la source
                         </label>
 
                         <InputText v-model="form.baseUrl
                             " class="w-full" placeholder="https://…"
-                            :required="createWithConnector && form.sourceType !== 'IMPORT_MANUEL'" />
+                            required />
                         <p v-if="form.sourceType === 'API'" class="mt-1 text-sm text-slate-500">
                             Crossref est pris en charge. Pour une autre API publique, utilisez son URL directe JSON avec une liste d’articles ; une page HTML ne convient pas.
                         </p>
                     </div>
 
-                    <div v-if="auth.isAdmin" class="space-y-3">
-                        <div class="flex items-center gap-2">
-                            <Checkbox v-if="form.sourceType !== 'IMPORT_MANUEL'" v-model="createWithConnector" input-id="with-connector" binary />
-                            <label v-if="form.sourceType !== 'IMPORT_MANUEL'" for="with-connector">Créer aussi le connecteur de collecte</label>
-                        </div>
-                        <Message v-if="form.sourceType === 'IMPORT_MANUEL'" severity="info">
-                            Après la création, utilisez le bouton d’import dans la ligne de la source pour sélectionner un fichier PDF, CSV ou XLSX.
-                        </Message>
-                        <p v-if="createWithConnector && ['RSS', 'ATOM'].includes(form.sourceType)"
-                            class="text-sm text-slate-500">
-                            Utilisez l’adresse du flux, pas celle de la page d’accueil. Le format XML, JSON ou CSV est détecté automatiquement.
+                    <p v-if="['RSS', 'ATOM'].includes(form.sourceType)" class="text-sm text-slate-500">
+                        Utilisez l’adresse du flux, pas celle de la page d’accueil. Une première collecte sera lancée après la création.
+                    </p>
+                    <div v-if="form.sourceType === 'API'">
+                        <p class="mb-2 text-sm text-slate-500">Les API publiques qui renvoient une liste JSON d’articles sont prises en charge. Les API nécessitant une clé ou une configuration spéciale ne le sont pas encore. Une première collecte sera lancée après la création.</p>
+                        <label for="source-query" class="mb-2 block">Sujet à surveiller</label>
+                        <InputText id="source-query" v-model="crossrefQuery" class="w-full" placeholder="Ex. : environnement, ISO 17025, laboratoire" />
+                        <p class="mt-1 text-sm text-slate-500">
+                            Séparez les sujets par des virgules. Une expression de plusieurs mots ne nécessite pas de guillemets.
                         </p>
-                        <div v-if="createWithConnector && form.sourceType === 'API'">
-                            <p class="mb-2 text-sm text-slate-500">Les API publiques qui renvoient une liste JSON d’articles sont prises en charge. Les API nécessitant une clé ou une configuration spéciale ne le sont pas encore.</p>
-                            <label for="source-query" class="mb-2 block">Sujet à surveiller</label>
-                            <InputText id="source-query" v-model="crossrefQuery" class="w-full" placeholder="Ex. : environnement, ISO 17025, bonbon sucré salé" />
-                            <p class="mt-1 text-sm text-slate-500">
-                                Séparez les sujets par des virgules. Une expression de plusieurs mots ne nécessite pas de guillemets.
-                            </p>
-                        </div>
                     </div>
-                    <Message v-else severity="info">Un administrateur devra configurer le connecteur pour permettre la
-                        collecte.
-                    </Message>
+                    <div v-if="form.sourceType === 'IMPORT_MANUEL'" class="space-y-2">
+                        <Message severity="info">
+                            Le fichier sélectionné sera importé immédiatement après la création de la source.
+                        </Message>
+                        <label for="new-source-import-file" class="required-label mb-2 block">Fichier à importer</label>
+                        <input id="new-source-import-file" ref="newSourceImportInput" type="file" required
+                            accept=".pdf,.csv,.xlsx,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                            @change="selectNewSourceFile" />
+                        <p class="text-xs text-slate-500">CSV, XLSX ou PDF · 5 Mo maximum.</p>
+                    </div>
 
                     <div class="flex justify-end gap-3">
                         <Button type="button" label="Annuler" severity="secondary" :disabled="submitting" @click="

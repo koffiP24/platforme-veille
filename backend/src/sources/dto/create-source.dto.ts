@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -31,11 +32,17 @@ export class CreateSourceDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
+  @IsIn(['API', 'RSS', 'ATOM', 'IMPORT_MANUEL'])
   sourceType: string;
 
   @IsOptional()
   @IsUrl()
   baseUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  query?: string;
 
   @IsOptional()
   @IsString()

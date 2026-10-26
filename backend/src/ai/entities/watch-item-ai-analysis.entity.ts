@@ -22,11 +22,18 @@ export class WatchItemAiAnalysis {
   @Column({ name: 'reviewed_by_id', type: 'integer', nullable: true })
   reviewedById: number | null;
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'reviewed_by_id', referencedColumnName: 'id', foreignKeyConstraintName: 'FK_watch_item_ai_analyses_reviewer' })
+  @JoinColumn({
+    name: 'reviewed_by_id',
+    referencedColumnName: 'id',
+    foreignKeyConstraintName: 'FK_watch_item_ai_analyses_reviewer',
+  })
   reviewedBy: User | null;
   @Column({ length: 30, default: 'openai' }) provider: string;
   @Column({ length: 100 }) model: string;
   @Column({ name: 'source_fingerprint', length: 64 }) sourceFingerprint: string;
+  @Column({ type: 'smallint', default: 1 }) attempts: number;
+  @Column({ name: 'duration_ms', type: 'integer', nullable: true }) durationMs: number | null;
+  @Column({ name: 'fallback_reason', type: 'text', nullable: true }) fallbackReason: string | null;
   @Column({ name: 'relevance_score', type: 'smallint' }) relevanceScore: number;
   @Column({ name: 'relevance_reason', type: 'text' }) relevanceReason: string;
   @Column({ type: 'text', nullable: true }) summary: string | null;
