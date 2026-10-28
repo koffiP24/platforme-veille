@@ -9,6 +9,16 @@ export class DeepLService {
   private readonly logger = new Logger(DeepLService.name);
   private warnedMissingKey = false;
   private unavailableUntil = 0;
+  private keyIndex = 0;
+
+  private getApiKeys(): string[] {
+    const values = [process.env.DEEPL_API_KEYS, process.env.DEEPL_API_KEY]
+      .filter((value): value is string => Boolean(value))
+      .flatMap((value) => value.split(','))
+      .map((value) => value.trim())
+      .filter(Boolean);
+    return [...new Set(values)];
+  }
 
   async translate(item: NormalizedWatchItem): Promise<NormalizedWatchItem> {
     const sourceItem: NormalizedWatchItem = {
@@ -22,7 +32,8 @@ export class DeepLService {
     }
     if (Date.now() < this.unavailableUntil) return sourceItem;
 
-    const apiKey = process.env.DEEPL_API_KEY?.trim();
+    const apiKeys = this.getApiKeys();
+    const apiKey = apiKeys.length ? apiKeys[this.keyIndex++ % apiKeys.length] : '';
     if (!apiKey) {
       if (!this.warnedMissingKey) {
         this.logger.warn('DEEPL_API_KEY absente : les nouvelles veilles restent dans leur langue d’origine.');
@@ -93,8 +104,9 @@ export class DeepLService {
   }
 
   async translateFrenchToEnglish(item: { title: string; summary: string | null }): Promise<{ title: string; summary: string | null }> {
-    const apiKey = process.env.DEEPL_API_KEY?.trim();
-    if (!apiKey) throw new Error('DEEPL_API_KEY absente.');
+    const apiKeys = this.getApiKeys();
+    const apiKey = apiKeys.length ? apiKeys[this.keyIndex++ % apiKeys.length] : '';
+    if (!apiKey) throw new Error('DEEPL_API_KEY ou DEEPL_API_KEYS absente.');
     const texts = [item.title, item.summary].filter((value): value is string => Boolean(value?.trim()));
     if (!texts.length) return item;
     const endpoint = apiKey.endsWith(':fx')

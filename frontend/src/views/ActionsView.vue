@@ -66,12 +66,19 @@ const finishDialog = ref(false);
 const finishingAction = ref<FollowUpAction | null>(null);
 const finishProgressComment = ref('');
 const finishResult = ref('');
+const detailDialog = ref(false);
+const detailAction = ref<FollowUpAction | null>(null);
 
 function openFinishDialog(action: FollowUpAction) {
     finishingAction.value = action;
     finishProgressComment.value = action.progressComment ?? '';
     finishResult.value = action.result ?? '';
     finishDialog.value = true;
+}
+
+function openActionDetails(action: FollowUpAction) {
+    detailAction.value = action;
+    detailDialog.value = true;
 }
 
 const updating =
@@ -492,6 +499,8 @@ onMounted(
                                     v-if="!data.progressComment && !data.result && !data.startedAt && !data.completedAt"
                                     class="muted-follow-up">Aucun détail renseigné</span>
                             </div>
+                            <Button v-if="data.status === 'DONE'" label="Voir les détails" icon="pi pi-eye" text size="small"
+                                class="details-button" @click="openActionDetails(data)" />
                         </template>
                     </Column>
 
@@ -563,6 +572,27 @@ onMounted(
             </template>
         </Dialog>
 
+        <Dialog v-model:visible="detailDialog" modal header="Détails de l'action" class="w-full max-w-xl">
+            <div v-if="detailAction" class="action-detail-dialog">
+                <h3>{{ detailAction.title }}</h3>
+                <p v-if="detailAction.watchItem"><strong>Veille :</strong> {{ detailAction.watchItem.title }}</p>
+                <div class="detail-status"><strong>Statut :</strong><Tag :value="labelFr(detailAction.status)"
+                    :severity="statusSeverity(detailAction.status)" /></div>
+                <dl class="detail-grid">
+                    <div><dt>Type</dt><dd>{{ labelFr(detailAction.actionType) }}</dd></div>
+                    <div><dt>Échéance</dt><dd>{{ formatDate(detailAction.dueDate) }}</dd></div>
+                    <div><dt>Début</dt><dd>{{ formatDate(detailAction.startedAt) }}</dd></div>
+                    <div><dt>Clôture</dt><dd>{{ formatDate(detailAction.completedAt) }}</dd></div>
+                </dl>
+                <div v-if="detailAction.progressComment" class="detail-block"><strong>Commentaire d’avancement</strong>
+                    <p>{{ detailAction.progressComment }}</p></div>
+                <div v-if="detailAction.result" class="detail-block"><strong>Résultat ou conclusion</strong>
+                    <p>{{ detailAction.result }}</p></div>
+                <p v-if="!detailAction.progressComment && !detailAction.result && !detailAction.startedAt && !detailAction.completedAt"
+                    class="muted-follow-up">Aucun détail renseigné pour le moment.</p>
+            </div>
+        </Dialog>
+
     </AppLayout>
 </template>
 
@@ -588,6 +618,17 @@ onMounted(
 .muted-follow-up {
     color: var(--app-text-secondary);
 }
+
+.details-button { margin-top: .35rem; padding-left: 0; }
+.action-detail-dialog { display: grid; gap: 1rem; }
+.action-detail-dialog h3 { margin: 0; color: var(--app-text-primary); }
+.action-detail-dialog p { margin: 0; line-height: 1.5; }
+.detail-status { display: flex; align-items: center; gap: .6rem; }
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 0; }
+.detail-grid dt { color: var(--app-text-secondary); font-size: .78rem; font-weight: 700; }
+.detail-grid dd { margin: .2rem 0 0; }
+.detail-block { padding: .8rem; border: 1px solid var(--app-border); border-radius: .65rem; background: var(--app-surface); }
+.detail-block p { margin-top: .35rem; white-space: pre-wrap; }
 
 .finish-fields label {
     display: block;

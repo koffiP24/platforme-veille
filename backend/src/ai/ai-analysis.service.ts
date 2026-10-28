@@ -43,8 +43,8 @@ interface AiResponse {
   };
 }
 
-type AiProvider = 'openai' | 'gemini' | 'claude' | 'deepseek';
-const AI_PROVIDERS: AiProvider[] = ['openai', 'gemini', 'claude', 'deepseek'];
+type AiProvider = 'openai' | 'gemini' | 'claude' | 'deepseek' | 'groq';
+const AI_PROVIDERS: AiProvider[] = ['openai', 'gemini', 'claude', 'deepseek', 'groq'];
 
 interface AssessmentResult {
   proposal: AiResponse;
@@ -60,6 +60,7 @@ const DEFAULT_MODELS: Record<AiProvider, string> = {
   gemini: 'gemini-3.8-flash',
   claude: 'claude-haiku-4-5-20251001',
   deepseek: 'deepseek-flash',
+  groq: 'llama-3.3-70b-versatile',
 };
 
 const IMPACT_LABELS: Record<ImpactProcess, string> = {
@@ -386,8 +387,8 @@ export class AiAnalysisService {
   }
 
   private getApiKeys(provider: AiProvider): string[] {
-    const keyName = { openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', claude: 'ANTHROPIC_API_KEY', deepseek: 'DEEPSEEK_API_KEY' }[provider];
-    const keysName = { openai: 'OPENAI_API_KEYS', gemini: 'GEMINI_API_KEYS', claude: 'ANTHROPIC_API_KEYS', deepseek: 'DEEPSEEK_API_KEYS' }[provider];
+    const keyName = { openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', claude: 'ANTHROPIC_API_KEY', deepseek: 'DEEPSEEK_API_KEY', groq: 'GROQ_API_KEY' }[provider];
+    const keysName = { openai: 'OPENAI_API_KEYS', gemini: 'GEMINI_API_KEYS', claude: 'ANTHROPIC_API_KEYS', deepseek: 'DEEPSEEK_API_KEYS', groq: 'GROQ_API_KEYS' }[provider];
     const configured = [this.config.get<string>(keysName), this.config.get<string>(keyName)]
       .filter((value): value is string => Boolean(value))
       .flatMap((value) => value.split(','))
@@ -405,7 +406,7 @@ export class AiAnalysisService {
   }
 
   private getModel(provider: AiProvider): string {
-    const keyName = { openai: 'OPENAI_MODEL', gemini: 'GEMINI_MODEL', claude: 'ANTHROPIC_MODEL', deepseek: 'DEEPSEEK_MODEL' }[provider];
+    const keyName = { openai: 'OPENAI_MODEL', gemini: 'GEMINI_MODEL', claude: 'ANTHROPIC_MODEL', deepseek: 'DEEPSEEK_MODEL', groq: 'GROQ_MODEL' }[provider];
     return this.config.get<string>(keyName)?.trim() || DEFAULT_MODELS[provider];
   }
 
@@ -518,6 +519,7 @@ export class AiAnalysisService {
       const providerMessage =
         errorDetails?.message ?? providerError?.message ?? 'Aucun détail fourni';
       const providerParam = errorDetails?.param ?? 'non précisé';
+      const billingError = /credit balance|billing|purchase credits|insufficient credit/i.test(String(providerMessage));
 
       this.logger.warn(
         `Erreur fournisseur IA : provider=${provider}, model=${model}, ` +
@@ -527,7 +529,7 @@ export class AiAnalysisService {
       let message = 'Le fournisseur IA n’a pas pu traiter cette veille.';
       if (response.status === 401 || response.status === 403) {
         message = 'Le fournisseur IA refuse la clé ou ses autorisations. Vérifiez la clé API et le projet associé.';
-      } else if (response.status === 429 || response.status === 402) {
+      } else if (response.status === 429 || response.status === 402 || billingError) {
         message = 'Le fournisseur IA a refusé la requête en raison d’une limite ou d’un problème de facturation. Vérifiez le détail dans le terminal.';
       } else if (response.status === 400) {
         message = 'Le fournisseur IA a rejeté la requête. Consultez le détail dans le terminal du backend.';
@@ -537,7 +539,7 @@ export class AiAnalysisService {
         message = 'Le fournisseur IA rencontre une panne temporaire. Réessayez plus tard.';
       }
       const providerFailure = new BadGatewayException(message) as BadGatewayException & { providerStatus?: number };
-      providerFailure.providerStatus = response.status;
+      providerFailure.providerStatus = billingError ? 402 : response.status;
       throw providerFailure;
     }
     const payload = (await response.json()) as {
@@ -558,7 +560,7 @@ export class AiAnalysisService {
       throw new BadGatewayException('La réponse IA est vide ou inexploitable.');
     let data: AiResponse;
     try {
-      data = this.parseJsonResponse(raw) as AiResponse;
+      data = this.normalizeResponse(this.parseJsonResponse(raw)) as unknown as AiResponse;
     } catch {
       throw new BadGatewayException(`La réponse IA n’est pas un JSON valide (fournisseur : ${provider}, modèle : ${model}).`);
     }
@@ -620,6 +622,30 @@ export class AiAnalysisService {
     }
   }
 
+  private normalizeResponse(value: unknown): Record<string, unknown> {
+    const source = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+    const classification = (source.classification ?? source.classification_proposee ?? {}) as Record<string, unknown>;
+    const pick = (camel: string, snake: string, fallback: unknown) => source[camel] ?? source[snake] ?? fallback;
+    const classPick = (camel: string, snake: string, fallback: unknown) => classification[camel] ?? classification[snake] ?? fallback;
+    const watchType = classPick('watchType', 'watch_type', 'AUTRE');
+    return {
+      relevanceScore: pick('relevanceScore', 'relevance_score', 0),
+      relevanceReason: pick('relevanceReason', 'relevance_reason', 'Aucune justification fournie par le fournisseur.'),
+      summary: pick('summary', 'resume', null),
+      potentialImpacts: pick('potentialImpacts', 'potential_impacts', []),
+      recommendedChecks: pick('recommendedChecks', 'recommended_checks', []),
+      classification: {
+        watchType: WATCH_TYPE_VALUES.includes(watchType as typeof WATCH_TYPE_VALUES[number]) ? watchType : 'AUTRE',
+        themes: classPick('themes', 'themes_proposes', []),
+        domains: classPick('domains', 'domaines', []),
+        keywords: classPick('keywords', 'mots_cles', []),
+        keywordWeights: classPick('keywordWeights', 'keyword_weights', []),
+        laboratories: classPick('laboratories', 'laboratoires', []),
+        rationale: classPick('rationale', 'justification', ''),
+      },
+    };
+  }
+
   private buildProviderRequest(
     provider: AiProvider,
     model: string,
@@ -667,6 +693,22 @@ export class AiAnalysisService {
           ],
           max_tokens: 1200,
           response_format: { type: 'json_object' },
+          stream: false,
+        },
+      };
+    }
+    if (provider === 'groq') {
+      headers.Authorization = `Bearer ${apiKey}`;
+      const groqInstructions = `${INSTRUCTIONS} Retourne un seul objet JSON, sans markdown ni texte avant ou après. Les six clés obligatoires au niveau racine sont exactement : relevanceScore (entier 0-100), relevanceReason (chaîne), summary (chaîne ou null), potentialImpacts (tableau), recommendedChecks (tableau) et classification (objet). classification doit obligatoirement contenir watchType, themes, domains, keywords, keywordWeights, laboratories et rationale. Même lorsqu’une valeur est vide, retourne la clé avec [] ou "" ou null.`;
+      return {
+        url: 'https://api.groq.com/openai/v1/chat/completions', headers,
+        body: {
+          model,
+          messages: [
+            { role: 'system', content: groqInstructions },
+            { role: 'user', content: inputText },
+          ],
+          max_tokens: 1200,
           stream: false,
         },
       };

@@ -1185,9 +1185,11 @@ La plateforme sert à **ne pas rater les informations importantes pour le labora
 > Elle centralise tout le cycle de veille du laboratoire, depuis la collecte de l’information jusqu’à sa qualification, sa validation, sa diffusion et son suivi.
 # Configuration multi-IA
 
-Le backend conserve les fournisseurs OpenAI, Gemini, Claude et DeepSeek. `AI_PROVIDER` peut contenir un fournisseur précis ou `auto`. En mode `auto`, l’ordre de basculement est défini par `AI_FALLBACK_PROVIDERS`.
+Le backend conserve les fournisseurs OpenAI, Gemini, Claude, DeepSeek et Groq. `AI_PROVIDER` peut contenir un fournisseur précis ou `auto`. En mode `auto`, l’ordre de basculement est défini par `AI_FALLBACK_PROVIDERS`.
 
 Chaque fournisseur accepte l’ancienne variable singulière (`*_API_KEY`) et une liste séparée par des virgules (`*_API_KEYS`). Les listes sont nettoyées, dédupliquées et utilisées avec une rotation contrôlée. `AI_MAX_KEY_ATTEMPTS` limite les clés essayées pour une analyse. Les clés restent uniquement dans l’environnement et ne sont jamais écrites en base ou dans les logs.
+
+`AI_MAX_KEY_ATTEMPTS` est facultative et vaut `2` par défaut. `AI_ALLOW_MANUAL_FAILOVER` est également facultative et vaut `false` par défaut. Elle doit rester à `false` lorsque `AI_PROVIDER` désigne un seul fournisseur et que le basculement vers les autres fournisseurs n’est pas souhaité.
 
 Le basculement est réservé aux erreurs réseau, délais d’attente, HTTP 402/429 et erreurs HTTP 5xx. Les erreurs 401 et 403 essaient d’abord les autres clés du même fournisseur ; si elles échouent toutes, la configuration est signalée. Les erreurs 400 ne sont pas relancées aveuglément. Un résultat accepté est toujours validé par le schéma interne avant d’être enregistré, et l’analyse conserve le fournisseur et le modèle réellement utilisés.
 
@@ -1195,12 +1197,31 @@ Exemple de mode automatique (sans secret réel) :
 
 ```dotenv
 AI_PROVIDER=auto
-AI_FALLBACK_PROVIDERS=gemini,claude,deepseek,openai
+AI_FALLBACK_PROVIDERS=gemini,claude,deepseek,groq,openai
 AI_MAX_KEY_ATTEMPTS=2
 GEMINI_API_KEYS=cle_1,cle_2
 ANTHROPIC_API_KEY=
 DEEPSEEK_API_KEY=
 OPENAI_API_KEY=
+GROQ_API_KEY=
+GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
 Pour tester un basculement, configurez un fournisseur prioritaire avec une clé volontairement invalide dans un environnement de test, un fournisseur suivant avec une clé valide, puis lancez une analyse. N’utilisez jamais de vraie clé dans le dépôt et ne testez pas la rotation pour contourner les quotas d’un même projet.
+
+Configuration OpenAI seule :
+
+```dotenv
+AI_PROVIDER=openai
+AI_FALLBACK_PROVIDERS=
+OPENAI_API_KEY=votre_cle_openai
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Dans cette configuration, les variables `AI_MAX_KEY_ATTEMPTS` et `AI_ALLOW_MANUAL_FAILOVER` peuvent être omises du fichier `backend/.env`.
+
+DeepL accepte également plusieurs clés. Utilisez `DEEPL_API_KEYS` avec des clés séparées par des virgules ; `DEEPL_API_KEY` reste compatible pour une seule clé. Les clés sont nettoyées et utilisées en rotation entre les appels de traduction :
+
+```dotenv
+DEEPL_API_KEYS=cle_deepl_1,cle_deepl_2
+```

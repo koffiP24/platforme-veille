@@ -43,6 +43,7 @@ import {
 
 import {
     getWatchItem,
+    translateWatchItemToEnglish,
     type WatchItem,
 } from '../services/watch-items.service';
 
@@ -107,6 +108,45 @@ const item =
     ref<WatchItem | null>(
         null,
     );
+
+const displayLanguage = ref<'fr' | 'original' | 'en'>('fr');
+const translatingToEnglish = ref(false);
+const itemOriginalLanguage = computed(() => item.value?.originalLanguage ?? item.value?.language ?? '');
+const sourceWasFrench = computed(() => /^fr(?:-|$)/i.test(itemOriginalLanguage.value));
+const availableDisplayLanguages = computed(() => {
+    if (!item.value) return [];
+    if (sourceWasFrench.value) return ['fr', 'en'] as const;
+    if (item.value.originalTitle && item.value.frenchTitle) return ['fr', 'original'] as const;
+    return [];
+});
+const displayedQualificationTitle = computed(() => {
+    if (!item.value) return '';
+    if (displayLanguage.value === 'original') return item.value.originalTitle ?? item.value.title;
+    if (displayLanguage.value === 'en') return item.value.englishTitle ?? item.value.title;
+    return item.value.frenchTitle ?? item.value.title;
+});
+const displayedQualificationSummary = computed(() => {
+    if (!item.value) return null;
+    if (displayLanguage.value === 'original') return item.value.originalSummary ?? item.value.summary;
+    if (displayLanguage.value === 'en') return item.value.englishSummary ?? item.value.summary;
+    return item.value.frenchSummary ?? item.value.summary;
+});
+
+async function selectDisplayLanguage(language: 'fr' | 'original' | 'en') {
+    if (!item.value) return;
+    if (language === 'en' && !item.value.englishTitle) {
+        translatingToEnglish.value = true;
+        try {
+            item.value = (await translateWatchItemToEnglish(item.value.id)).data;
+        } catch {
+            toast.add({ severity: 'error', summary: 'Traduction indisponible', detail: 'La traduction anglaise n’a pas pu être chargée.', life: 5000 });
+            return;
+        } finally {
+            translatingToEnglish.value = false;
+        }
+    }
+    displayLanguage.value = language;
+}
 
 const topics =
     ref<Topic[]>([]);
@@ -706,11 +746,22 @@ onMounted(
                 item
             ">
 
-                <SectionCard :title="item.title
+                <SectionCard :title="displayedQualificationTitle
                     " :subtitle="`Source : ${item.source?.name ?? 'Non renseignée'}`
                         " icon="pi pi-file">
 
                     <div class="item-overview">
+
+                        <div v-if="availableDisplayLanguages.length" class="language-switch" aria-label="Langue du contenu">
+                            <Button v-for="language in availableDisplayLanguages" :key="language"
+                                :label="language === 'fr' ? 'Français' : language === 'en' ? 'Anglais' : `Original (${itemOriginalLanguage.toUpperCase()})`"
+                                size="small"
+                                :severity="displayLanguage === language ? 'primary' : 'secondary'"
+                                :outlined="displayLanguage !== language"
+                                :loading="language === 'en' && translatingToEnglish"
+                                :disabled="translatingToEnglish"
+                                @click="selectDisplayLanguage(language)" />
+                        </div>
 
                         <div class="overview-meta">
 
@@ -746,7 +797,7 @@ onMounted(
 
                             <p>
                                 {{
-                                    item.summary
+                                    displayedQualificationSummary
                                     ||
                                     'Aucun résumé disponible.'
                                 }}
@@ -1469,5 +1520,11 @@ onMounted(
         grid-column:
             auto;
     }
+}
+.language-switch {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.75rem;
 }
 </style>
