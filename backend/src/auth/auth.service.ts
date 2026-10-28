@@ -14,6 +14,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { RefreshSession } from './entities/refresh-session.entity';
 import { jwtTtlSeconds } from './session-config';
 import { AuditService } from '../audit/audit.service';
+import { UserPasswordHistory } from './entities/user-password-history.entity';
 
 type RefreshPayload = { sub: number; jti: string; type: 'refresh' };
 
@@ -30,6 +31,8 @@ export class AuthService {
     private readonly auditService: AuditService,
     @InjectRepository(RefreshSession)
     private readonly sessions: Repository<RefreshSession>,
+    @InjectRepository(UserPasswordHistory)
+    private readonly passwordHistory: Repository<UserPasswordHistory>,
   ) {
     this.accessTtlSeconds = jwtTtlSeconds(config.get<string>('JWT_EXPIRES_IN'), '8h');
     this.refreshTtlSeconds = jwtTtlSeconds(config.get<string>('JWT_REFRESH_EXPIRES_IN'), '7d');
@@ -124,6 +127,20 @@ export class AuthService {
       );
     }
 
+    const previousPasswords = await this.passwordHistory.find({
+      where: { userId: user.id },
+      select: { passwordHash: true },
+    });
+    for (const previous of previousPasswords) {
+      if (await bcrypt.compare(dto.newPassword, previous.passwordHash)) {
+        throw new BadRequestException('Ce mot de passe a déjà été utilisé. Choisissez-en un autre.');
+      }
+    }
+
+    await this.passwordHistory.save(this.passwordHistory.create({
+      userId: user.id,
+      passwordHash: userWithPassword.passwordHash,
+    }));
     userWithPassword.passwordHash = await bcrypt.hash(dto.newPassword, 12);
     userWithPassword.mustChangePassword = false;
     const saved = await this.usersService.saveUser(userWithPassword);

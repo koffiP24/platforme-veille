@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { Role } from '../roles/entities/role.entity';
 import { User } from './entities/user.entity';
 import { UsersService } from './users.service';
+import { UserPasswordHistory } from '../auth/entities/user-password-history.entity';
 
 describe('UsersService', () => {
   it('ne retourne comme assignables que les comptes actifs', async () => {
@@ -26,6 +27,7 @@ describe('UsersService', () => {
         UsersService,
         { provide: getRepositoryToken(User), useValue: repository },
         { provide: getRepositoryToken(Role), useValue: {} },
+        { provide: getRepositoryToken(UserPasswordHistory), useValue: {} },
         { provide: AuditService, useValue: { log: vi.fn() } },
       ],
     }).compile();

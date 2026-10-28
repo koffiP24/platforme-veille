@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
 import { RefreshSession } from './entities/refresh-session.entity';
+import { UserPasswordHistory } from './entities/user-password-history.entity';
 import { AuditService } from '../audit/audit.service';
 
 describe('AuthService', () => {
@@ -33,6 +34,11 @@ describe('AuthService', () => {
     findOne: vi.fn(),
     update: vi.fn().mockResolvedValue({ affected: 1 }),
     delete: vi.fn().mockResolvedValue({ affected: 1 }),
+  };
+  const passwordHistory = {
+    find: vi.fn().mockResolvedValue([]),
+    create: vi.fn((value) => value),
+    save: vi.fn().mockResolvedValue(undefined),
   };
   const config = {
     get: vi.fn((key: string) => ({
@@ -60,6 +66,7 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: config },
         { provide: AuditService, useValue: auditService },
         { provide: getRepositoryToken(RefreshSession), useValue: sessions },
+        { provide: getRepositoryToken(UserPasswordHistory), useValue: passwordHistory },
       ],
     }).compile();
     service = module.get(AuthService);
@@ -155,6 +162,21 @@ describe('AuthService', () => {
       action: 'CHANGE_PASSWORD',
       entityId: user.id,
     }));
+  });
+
+  it('refuse la réutilisation d’un ancien mot de passe', async () => {
+    const currentHash = await bcrypt.hash('TempPassword123!', 4);
+    const previousHash = await bcrypt.hash('ReusedPassword123!', 4);
+    const userToUpdate = { ...user, passwordHash: currentHash, mustChangePassword: true };
+    usersService.findById.mockResolvedValue(userToUpdate);
+    usersService.findByEmailWithPassword.mockResolvedValue(userToUpdate);
+    passwordHistory.find.mockResolvedValueOnce([{ passwordHash: previousHash }]);
+
+    await expect(service.changePassword(user.id, {
+      currentPassword: 'TempPassword123!',
+      newPassword: 'ReusedPassword123!',
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(usersService.saveUser).not.toHaveBeenCalled();
   });
 
   it('refuse le changement si le mot de passe actuel est erroné', async () => {

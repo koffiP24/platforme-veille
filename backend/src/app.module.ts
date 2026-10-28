@@ -56,6 +56,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
 import { rateLimitOptions } from './auth/rate-limit.config';
 import { AiAnalysisModule } from './ai/ai-analysis.module';
 import { WatchItemAiAnalysis } from './ai/entities/watch-item-ai-analysis.entity';
+import { UserPasswordHistory } from './auth/entities/user-password-history.entity';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { WatchItemAiAnalysis } from './ai/entities/watch-item-ai-analysis.entity
         User,
         RefreshSession,
         PasswordResetToken,
+        UserPasswordHistory,
         Role,
         Permission,
         Source,

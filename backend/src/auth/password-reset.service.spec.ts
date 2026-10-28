@@ -6,6 +6,8 @@ import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { RefreshSession } from './entities/refresh-session.entity';
 import { User } from '../users/entities/user.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
+import { UserPasswordHistory } from './entities/user-password-history.entity';
+import * as bcrypt from 'bcrypt';
 
 describe('PasswordResetService', () => {
   const user = { id: 7, email: 'lecteur@veille.local', status: 'ACTIVE' };
@@ -25,9 +27,15 @@ describe('PasswordResetService', () => {
   };
   const sessionRepo = { delete: vi.fn().mockResolvedValue({ affected: 1 }) };
   const auditRepo = { save: vi.fn().mockResolvedValue(undefined) };
+  const historyRepo = {
+    find: vi.fn().mockResolvedValue([]),
+    create: vi.fn((value) => value),
+    save: vi.fn().mockResolvedValue(undefined),
+  };
   const manager = {
     getRepository: vi.fn((entity) => entity === PasswordResetToken ? resetRepo :
-      entity === RefreshSession ? sessionRepo : entity === AuditLog ? auditRepo : userRepo),
+      entity === RefreshSession ? sessionRepo : entity === AuditLog ? auditRepo :
+        entity === UserPasswordHistory ? historyRepo : userRepo),
   };
   const database = { transaction: vi.fn((work) => work(manager)) };
   const mail = {
@@ -38,11 +46,11 @@ describe('PasswordResetService', () => {
   const service = new PasswordResetService(users as never, tokens as never,
     database as never, mail as never);
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     query.getOne.mockResolvedValue(user);
     resetRepo.findOne.mockResolvedValue(null);
-    userRepo.findOne.mockResolvedValue(user);
+    userRepo.findOne.mockResolvedValue({ ...user, passwordHash: await bcrypt.hash('CurrentPassword123!', 4) });
     userRepo.update.mockResolvedValue({ affected: 1 });
   });
 

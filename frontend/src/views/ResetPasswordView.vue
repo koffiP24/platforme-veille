@@ -15,9 +15,19 @@ const confirmation = ref('');
 const loading = ref(false);
 const completed = ref(false);
 const error = ref('');
-const validPassword = computed(() => password.value.length >= 12 && password.value.length <= 72 &&
-  /[a-z]/.test(password.value) && /[A-Z]/.test(password.value) &&
-  /\d/.test(password.value) && /[^A-Za-z0-9]/.test(password.value));
+const passwordRules = computed(() => {
+  const value = password.value;
+  return [
+    { label: '12 caractères minimum', valid: value.length >= 12 },
+    { label: 'Une lettre minuscule', valid: /[a-z]/.test(value) },
+    { label: 'Une lettre majuscule', valid: /[A-Z]/.test(value) },
+    { label: 'Un chiffre', valid: /\d/.test(value) },
+    { label: 'Un caractère spécial', valid: /[^A-Za-z0-9]/.test(value) },
+    { label: '72 caractères maximum', valid: value.length > 0 && value.length <= 72 },
+  ];
+});
+const validPassword = computed(() => passwordRules.value.every((rule) => rule.valid));
+const passwordsMatch = computed(() => password.value === confirmation.value);
 
 async function submit() {
   if (loading.value || !token) return;
@@ -55,10 +65,19 @@ async function submit() {
       <form v-if="token && !completed" @submit.prevent="submit">
         <label for="new-password">Nouveau mot de passe</label>
         <Password id="new-password" v-model="password" autocomplete="new-password" :feedback="false" toggle-mask fluid required />
-        <p>12 caractères minimum, avec majuscule, minuscule, chiffre et caractère spécial.</p>
+        <div class="password-checklist">
+          <span class="checklist-title">Critères de sécurité :</span>
+          <ul>
+            <li v-for="rule in passwordRules" :key="rule.label" :class="{ met: rule.valid }">
+              <i :class="rule.valid ? 'pi pi-check' : 'pi pi-circle'" />
+              {{ rule.label }}
+            </li>
+          </ul>
+        </div>
         <label for="confirm-password">Confirmer le mot de passe</label>
         <Password id="confirm-password" v-model="confirmation" autocomplete="new-password" :feedback="false" toggle-mask fluid required />
-        <Button type="submit" label="Enregistrer le mot de passe" :loading="loading" :disabled="loading" fluid />
+        <small v-if="confirmation && !passwordsMatch" class="text-danger">Les mots de passe ne correspondent pas.</small>
+        <Button type="submit" label="Enregistrer le mot de passe" :loading="loading" :disabled="loading || !validPassword || !passwordsMatch" fluid />
       </form>
       <RouterLink :to="token ? '/login' : '/forgot-password'">{{ token ? 'Retour à la connexion' : 'Demander un nouveau lien' }}</RouterLink>
     </section>
@@ -70,9 +89,14 @@ async function submit() {
 .recovery-card { width: min(100%, 28rem); display: grid; gap: 1rem; padding: 2rem; border: 1px solid var(--app-border-strong); border-radius: 1rem; background: var(--app-surface); box-shadow: var(--app-shadow); }
 .recovery-logo { width: 3.2rem; height: 3.2rem; object-fit: contain; }
 h1 { margin: 0; color: var(--app-text); font-size: 1.5rem; }
-p { margin: 0; color: var(--app-text-muted); font-size: .78rem; line-height: 1.5; }
 form { display: grid; gap: .75rem; }
 label { color: var(--app-text-secondary); font-size: .82rem; }
+.password-checklist { display: grid; gap: .4rem; padding: .75rem 1rem; border: 1px solid var(--app-border); border-radius: .5rem; background: var(--app-surface-muted); font-size: .8rem; }
+.checklist-title { color: var(--app-text-secondary); font-weight: 600; }
+.password-checklist ul { display: grid; gap: .25rem; margin: 0; padding: 0; list-style: none; }
+.password-checklist li { display: flex; align-items: center; gap: .5rem; color: var(--app-text-muted); }
+.password-checklist li.met { color: #16a34a; font-weight: 500; }
+.text-danger { color: #dc2626; font-size: .78rem; }
 a { color: var(--app-primary); font-size: .82rem; text-decoration: none; }
 a:hover { text-decoration: underline; }
 </style>

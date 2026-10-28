@@ -1035,7 +1035,7 @@ onMounted(
                 " />
 
             <Button type="submit" label="Créer l'utilisateur" :loading="creating
-              " :disabled="!passwordValid || !form.roles.length" />
+            " :disabled="(!useAutoTemporaryPassword && !passwordValid) || !form.roles.length" />
 
           </div>
 

@@ -13,6 +13,7 @@ import { Role } from '../roles/entities/role.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { User } from './entities/user.entity';
 import { AuditService } from '../audit/audit.service';
+import { UserPasswordHistory } from '../auth/entities/user-password-history.entity';
 
 @Injectable()
 export class UsersService {
@@ -22,6 +23,8 @@ export class UsersService {
 
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
+    @InjectRepository(UserPasswordHistory)
+    private readonly passwordHistory: Repository<UserPasswordHistory>,
     private readonly auditService: AuditService,
   ) {}
 
@@ -151,17 +154,23 @@ export class UsersService {
 
   async resetToTemporaryPassword(id: number, actorId: number): Promise<{ temporaryPassword: string }> {
     const user = await this.findById(id);
+    const userWithPassword = await this.findByEmailWithPassword(user.email);
+    if (!userWithPassword) throw new NotFoundException('Utilisateur introuvable');
     const temporaryPassword = this.generateTemporaryPassword(16);
-    user.passwordHash = await bcrypt.hash(temporaryPassword, 12);
-    user.mustChangePassword = true;
+    await this.passwordHistory.save(this.passwordHistory.create({
+      userId: userWithPassword.id,
+      passwordHash: userWithPassword.passwordHash,
+    }));
+    userWithPassword.passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    userWithPassword.mustChangePassword = true;
 
-    await this.userRepository.save(user);
+    await this.userRepository.save(userWithPassword);
 
     await this.auditService.log({
       userId: actorId,
       action: 'RESET_USER_PASSWORD_TEMPORARY',
       entity: 'users',
-      entityId: user.id,
+      entityId: userWithPassword.id,
       afterValue: { mustChangePassword: true },
     });
 

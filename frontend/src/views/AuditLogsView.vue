@@ -339,6 +339,12 @@ const actionLabels:
   RESET_PASSWORD:
     'Modification du mot de passe',
 
+  CHANGE_PASSWORD:
+    'Changement de mot de passe',
+
+  RESET_USER_PASSWORD_TEMPORARY:
+    'Génération d’un mot de passe temporaire',
+
   CREATE_USER:
     'Création d’un utilisateur',
 
@@ -562,6 +568,9 @@ const fieldLabels:
   status:
     'Statut',
 
+  mustChangePassword:
+    'Changement de mot de passe requis',
+
   roles:
     'Rôles',
 
@@ -708,6 +717,9 @@ const fieldLabels:
 
   count:
     'Nombre d’éléments',
+
+  result:
+    'Résultat',
 
   connectorType:
     'Type de connecteur',
@@ -1192,22 +1204,17 @@ function asRecord(
     unknown
   > {
 
-  return value
-    &&
-    typeof value ===
-    'object'
-    &&
-    !Array.isArray(
-      value,
-    )
+  if (Array.isArray(value)) {
+    return value.length ? { items: value } : {};
+  }
 
-    ? value as
-    Record<
-      string,
-      unknown
-    >
+  if (value && typeof value === 'object') {
+    return value as Record<string, unknown>;
+  }
 
-    : {};
+  return value === null || value === undefined || value === ''
+    ? {}
+    : { result: value };
 }
 
 

@@ -514,17 +514,32 @@ Le frontend et le backend doivent donc être utilisés avec les cookies autoris�
 
 ---
 
-## 18. Créer les utilisateurs
+## 18. Créer les utilisateurs et gestion des mots de passe temporaires
 
-Depuis **Utilisateurs**, l’administrateur peut créer les comptes et leur attribuer un ou plusieurs rôles.
-
-Exemples :
+Depuis **Utilisateurs**, l’administrateur peut créer les comptes et leur attribuer un ou plusieurs rôles :
 
 - administrateur ;
 - responsable de veille ;
 - opérateur de veille ;
 - référent laboratoire ;
 - lecteur.
+
+### Mot de passe temporaire avec changement obligatoire
+
+Lors de la création d'un utilisateur, l'option **« Générer un mot de passe temporaire aléatoire »** est active par défaut :
+
+1. **Génération sécurisée** : le système génère un mot de passe temporaire aléatoire fort de 16 caractères (minuscules, majuscules, chiffres et caractères spéciaux). L'administrateur peut également décocher cette option pour définir un mot de passe initial manuellement.
+2. **Transmission sécurisée** : une boîte de dialogue s'affiche immédiatement après la validation avec le mot de passe en clair et un bouton de copie en un clic. Ce mot de passe temporaire doit être transmis à l'utilisateur de façon sécurisée (il ne sera plus réaffiché par la suite).
+3. **Changement obligatoire à la première connexion** :
+   - Dès la première authentification avec le mot de passe temporaire, l'utilisateur est redirigé vers l'écran `/change-password`.
+   - Le backend (`JwtAuthGuard`) bloque tout accès aux autres API tant que le mot de passe n'a pas été changé.
+   - L'utilisateur doit renseigner son mot de passe temporaire puis choisir un nouveau mot de passe conforme aux règles de sécurité (minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial).
+   - Une fois validé, le mot de passe temporaire est révoqué, une entrée est inscrite au journal d'audit (`CHANGE_PASSWORD`) et l'accès à la plateforme est débloqué.
+4. **Indicateur et réinitialisation** :
+   - Les comptes en attente de première connexion portent un badge **« MDP temp. »** dans la table des utilisateurs.
+   - L’administrateur peut à tout moment régénérer un nouveau mot de passe temporaire pour un utilisateur existant via l'icône de clé (**Générer un mot de passe temporaire**).
+
+La migration `AddMustChangePasswordToUsers` doit être exécutée avant d'utiliser cette fonctionnalité. L'historique des mots de passe repose sur des condensats bcrypt dans `user_password_history` ; chaque changement, réinitialisation ou génération d'un nouveau mot de passe temporaire conserve l'ancien condensat et interdit sa réutilisation. La migration `AddUserPasswordHistory` initialise l'historique avec le condensat courant de chaque compte existant ; exécuter les migrations avant le déploiement.
 
 ---
 
@@ -844,7 +859,9 @@ backend/storage/reports/
 
 ## 29. Journal d’audit
 
-Le journal permet de tracer les opérations importantes de l’application :
+Le journal permet de tracer les opérations importantes de l’application. La page charge les 500 opérations les plus récentes ; la pagination de l’interface ne limite que leur affichage par page. Les détails présentent les champs modifiés et prennent aussi en charge les instantanés sous forme de listes ou de valeurs simples.
+
+Il trace notamment :
 
 - création ;
 - modification ;
@@ -876,13 +893,14 @@ La page de santé permet notamment de vérifier :
 | Méthode | Route | Description |
 |---|---|---|
 | POST | `/api/v1/auth/login` | Connexion |
+| POST | `/api/v1/auth/change-password` | Changer le mot de passe (obligatoire si temporaire) |
 | POST | `/api/v1/auth/forgot-password` | Demander un lien de réinitialisation par e-mail |
 | POST | `/api/v1/auth/reset-password` | Définir un nouveau mot de passe avec le lien reçu |
 | POST | `/api/v1/auth/refresh` | Renouveler les cookies de session |
 | POST | `/api/v1/auth/logout` | Déconnexion |
 | GET | `/api/v1/auth/me` | Profil connecté |
 
-Le lien de réinitialisation expire après 15 minutes et ne peut être utilisé qu'une fois. Seule l'empreinte SHA-256 du jeton est enregistrée en base. La réponse à la demande de lien est identique pour une adresse connue ou inconnue. Après le changement de mot de passe, les sessions de rafraîchissement existantes sont supprimées, une entrée sans donnée secrète est ajoutée au journal d'audit et un e-mail de confirmation est envoyé sans inclure le mot de passe. L'échec de l'envoi est journalisé sans annuler le changement déjà enregistré. Exécuter la migration `AddPasswordResetTokens` avant de déployer cette fonction. Si SMTP est absent ou en erreur lors de la demande de lien, le backend journalise l'échec sans révéler l'existence du compte à l'appelant.
+Le lien de réinitialisation expire après 15 minutes et ne peut être utilisé qu'une fois. Seule l'empreinte SHA-256 du jeton est enregistrée en base. La réponse à la demande de lien est identique pour une adresse connue ou inconnue. Après le changement de mot de passe, les sessions de rafraîchissement existantes sont supprimées, une entrée sans donnée secrète est ajoutée au journal d'audit et un e-mail de confirmation est envoyé sans inclure le mot de passe. L'échec de l'envoi est journalisé sans annuler le changement déjà enregistré. Exécuter la migration `AddPasswordResetTokens` avant de déployer cette fonction. La route `/api/v1/auth/change-password` permet le changement de mot de passe d'un utilisateur connecté (obligatoire lors de la première connexion avec mot de passe temporaire) et enregistre l'action au journal d'audit. Si SMTP est absent ou en erreur lors de la demande de lien, le backend journalise l'échec sans révéler l'existence du compte à l'appelant.
 
 ## 32. Utilisateurs / rôles
 
@@ -890,6 +908,7 @@ Le lien de réinitialisation expire après 15 minutes et ne peut être utilisé 
 |---|---|---|
 | GET | `/api/v1/users` | Liste |
 | POST | `/api/v1/users` | Création |
+| POST | `/api/v1/users/:id/temporary-password` | Générer un nouveau mot de passe temporaire |
 | PATCH | `/api/v1/users/:id/status` | Activation/désactivation |
 | PATCH | `/api/v1/users/:id/roles` | Rôles |
 | GET | `/api/v1/roles` | Liste des rôles |

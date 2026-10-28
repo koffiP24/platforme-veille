@@ -16,13 +16,14 @@ import { PasswordResetService } from './password-reset.service';
 import { User } from '../users/entities/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { jwtTtlSeconds } from './session-config';
+import { UserPasswordHistory } from './entities/user-password-history.entity';
 
 @Module({
   imports: [
     UsersModule,
     AuditModule,
     NotificationsModule,
-    TypeOrmModule.forFeature([RefreshSession, PasswordResetToken, User]),
+    TypeOrmModule.forFeature([RefreshSession, PasswordResetToken, User, UserPasswordHistory]),
 
     PassportModule.register({ defaultStrategy: 'jwt' }),
 

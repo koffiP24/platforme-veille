@@ -9,6 +9,7 @@ import { AuditLog } from '../audit/entities/audit-log.entity';
 import { User } from '../users/entities/user.entity';
 import { RefreshSession } from './entities/refresh-session.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
+import { UserPasswordHistory } from './entities/user-password-history.entity';
 
 const RESET_TTL_MS = 15 * 60 * 1000;
 const REQUEST_MESSAGE = 'Si cette adresse existe dans notre système, un lien de réinitialisation a été envoyé.';
@@ -89,11 +90,26 @@ export class PasswordResetService {
 
       const user = await manager.getRepository(User).findOne({
         where: { id: reset.userId, status: 'ACTIVE' },
-        select: { id: true, email: true },
+        select: { id: true, email: true, passwordHash: true },
       });
       if (!user) throw new BadRequestException('Lien de réinitialisation invalide ou expiré.');
 
+      const history = manager.getRepository(UserPasswordHistory);
+      const previousPasswords = await history.find({
+        where: { userId: user.id },
+        select: { passwordHash: true },
+      });
+      for (const previous of previousPasswords) {
+        if (await bcrypt.compare(newPassword, previous.passwordHash)) {
+          throw new BadRequestException('Ce mot de passe a déjà été utilisé. Choisissez-en un autre.');
+        }
+      }
+      if (await bcrypt.compare(newPassword, user.passwordHash)) {
+        throw new BadRequestException('Ce mot de passe a déjà été utilisé. Choisissez-en un autre.');
+      }
+
       const passwordHash = await bcrypt.hash(newPassword, 12);
+      await history.save(history.create({ userId: user.id, passwordHash: user.passwordHash }));
       const updated = await manager.getRepository(User).update(
         { id: reset.userId, status: 'ACTIVE' }, { passwordHash },
       );

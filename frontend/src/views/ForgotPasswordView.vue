@@ -36,7 +36,7 @@ async function submit() {
       <Message v-if="error" severity="error">{{ error }}</Message>
       <form v-if="!sent" @submit.prevent="submit">
         <label for="recovery-email">Adresse électronique</label>
-        <InputText id="recovery-email" v-model="email" type="email" autocomplete="email" placeholder="nom@laboratoire.com" required fluid />
+        <InputText id="recovery-email" v-model="email" type="email" autocomplete="email" placeholder="nom@gmail.com" required fluid />
         <Button type="submit" label="Envoyer le lien" :loading="loading" :disabled="loading" fluid />
       </form>
       <RouterLink to="/login">Retour à la connexion</RouterLink>
