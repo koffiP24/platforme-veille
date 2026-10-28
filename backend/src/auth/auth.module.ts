@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { UsersModule } from '../users/users.module';
+import { AuditModule } from '../audit/audit.module';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -19,6 +20,7 @@ import { jwtTtlSeconds } from './session-config';
 @Module({
   imports: [
     UsersModule,
+    AuditModule,
     NotificationsModule,
     TypeOrmModule.forFeature([RefreshSession, PasswordResetToken, User]),
 

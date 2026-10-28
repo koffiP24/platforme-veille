@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import LoginView from "../views/LoginView.vue";
 const ForgotPasswordView = () => import("../views/ForgotPasswordView.vue");
 const ResetPasswordView = () => import("../views/ResetPasswordView.vue");
+const ChangePasswordView = () => import("../views/ChangePasswordView.vue");
 import { useAuthStore } from "../stores/auth";
 
 const DashboardView = () => import("../views/DashboardView.vue");
@@ -126,6 +127,14 @@ const router = createRouter({
       name: "reset-password",
       component: ResetPasswordView,
     },
+    {
+      path: "/change-password",
+      name: "change-password",
+      component: ChangePasswordView,
+      meta: {
+        requiresAuth: true,
+      },
+    },
 
     {
       path: "/",
@@ -171,6 +180,19 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return { name: "login" };
+  }
+
+  // Obligation de changement de mot de passe à la première connexion
+  if (auth.isAuthenticated && auth.mustChangePassword) {
+    if (to.name !== "change-password") {
+      return { name: "change-password" };
+    }
+    return true;
+  }
+
+  // Si l'utilisateur n'a pas besoin de changer son mot de passe
+  if (to.name === "change-password") {
+    return { name: "dashboard" };
   }
 
   if (to.meta.adminOnly && !userRoles.includes("ADMIN")) {

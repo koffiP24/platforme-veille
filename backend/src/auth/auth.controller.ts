@@ -12,6 +12,7 @@ import type { Request as ExpressRequest, Response } from 'express';
 
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { PasswordResetService } from './password-reset.service';
@@ -71,6 +72,25 @@ export class AuthController {
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto, @Req() request: ExpressRequest) {
     return this.passwordResetService.resetPassword(dto.token, dto.newPassword, request.ip);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  async changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Req() request: ExpressRequest & { user: { id: number } },
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.changePassword(
+      request.user.id,
+      dto,
+      request.ip,
+    );
+    this.setCookies(response, result.tokens.accessToken, result.tokens.refreshToken);
+    return {
+      message: 'Mot de passe modifié avec succès.',
+      user: result.user,
+    };
   }
 
   @Post('refresh')

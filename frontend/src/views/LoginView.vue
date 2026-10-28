@@ -92,9 +92,7 @@ async function submit() {
       animationStartedAt,
     );
 
-    await router.push(
-      '/',
-    );
+    if (auth.mustChangePassword) { await router.push('/change-password'); } else { await router.push('/'); }
   } catch (
   err:
     any
@@ -970,3 +968,4 @@ async function submit() {
   }
 }
 </style>
+

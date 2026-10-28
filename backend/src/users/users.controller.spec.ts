@@ -7,7 +7,7 @@ import { UsersService } from './users.service';
 
 describe('UsersController', () => {
   it('retourne les utilisateurs fournis par le service', async () => {
-    const users = [{ id: 1, email: 'admin@veille.local' }];
+    const users = [{ id: 1, email: 'admin@veille.local', firstName: 'Admin', lastName: 'Sys', status: 'ACTIVE', roles: [{ id: 1, name: 'ADMIN', description: 'Admin' }] }];
     const module = await Test.createTestingModule({
       controllers: [UsersController],
       providers: [{ provide: UsersService, useValue: { findAll: () => users } }],
@@ -18,6 +18,17 @@ describe('UsersController', () => {
       .useValue({ canActivate: () => true })
       .compile();
 
-    expect(module.get(UsersController).findAll()).toEqual(users);
+    await expect(module.get(UsersController).findAll()).resolves.toEqual([
+      {
+        id: 1,
+        email: 'admin@veille.local',
+        firstName: 'Admin',
+        lastName: 'Sys',
+        status: 'ACTIVE',
+        mustChangePassword: false,
+        lastLoginAt: undefined,
+        roles: [{ id: 1, name: 'ADMIN', description: 'Admin' }],
+      },
+    ]);
   });
 });

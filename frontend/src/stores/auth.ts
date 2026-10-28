@@ -9,6 +9,7 @@ export interface CurrentUser {
   lastName: string;
   email: string;
   roles: string[];
+  mustChangePassword?: boolean;
 }
 
 const USER_CACHE_KEY = "veille_current_user";
@@ -33,6 +34,7 @@ function readCachedUser(): CurrentUser | null {
       lastName: typeof parsed.lastName === "string" ? parsed.lastName : "",
       email: parsed.email,
       roles: parsed.roles.filter((role): role is string => typeof role === "string"),
+      mustChangePassword: Boolean(parsed.mustChangePassword),
     };
   } catch {
     sessionStorage.removeItem(USER_CACHE_KEY);
@@ -59,6 +61,10 @@ export const useAuthStore = defineStore("auth", () => {
 
   const isAdmin = computed(() => user.value?.roles.includes("ADMIN"));
 
+  const mustChangePassword = computed(
+    () => Boolean(user.value?.mustChangePassword),
+  );
+
   async function login(email: string, password: string) {
     const response = await api.post("/auth/login", {
       email,
@@ -78,6 +84,7 @@ export const useAuthStore = defineStore("auth", () => {
         ...currentUser,
         firstName: currentUser.firstName || cachedUser?.firstName || "",
         lastName: currentUser.lastName || cachedUser?.lastName || "",
+        mustChangePassword: Boolean(currentUser.mustChangePassword),
       });
     } catch {
       setUser(null);
@@ -85,6 +92,19 @@ export const useAuthStore = defineStore("auth", () => {
       initialized.value = true;
     }
     return isAuthenticated.value;
+  }
+
+  async function changePassword(currentPassword: string, newPassword: string) {
+    const response = await api.post("/auth/change-password", {
+      currentPassword,
+      newPassword,
+    });
+    if (response.data?.user) {
+      setUser(response.data.user);
+    } else if (user.value) {
+      setUser({ ...user.value, mustChangePassword: false });
+    }
+    return response.data;
   }
 
   async function logout() {
@@ -107,8 +127,10 @@ export const useAuthStore = defineStore("auth", () => {
     initialized,
     isAuthenticated,
     isAdmin,
+    mustChangePassword,
     login,
     restoreSession,
+    changePassword,
     logout,
   };
 });

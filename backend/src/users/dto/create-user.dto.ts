@@ -2,8 +2,10 @@ import {
   ArrayNotEmpty,
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEmail,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MinLength,
   MaxLength,
@@ -25,6 +27,7 @@ export class CreateUserDto {
   @MaxLength(254)
   email: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(12)
   @MaxLength(72)
@@ -32,7 +35,11 @@ export class CreateUserDto {
     message:
       'Le mot de passe doit contenir une minuscule, une majuscule, un chiffre et un caractère spécial.',
   })
-  password: string;
+  password?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  temporaryPassword?: boolean;
 
   @IsArray()
   @ArrayNotEmpty()

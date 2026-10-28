@@ -36,6 +36,13 @@ export class User {
   })
   status: string;
 
+  @Column({
+    name: 'must_change_password',
+    type: 'boolean',
+    default: false,
+  })
+  mustChangePassword: boolean;
+
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamptz',

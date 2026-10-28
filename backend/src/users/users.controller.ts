@@ -22,17 +22,46 @@ export class UsersController {
 
   @Get()
   @Roles('ADMIN')
-  findAll() {
-    return this.usersService.findAll();
+  async findAll() {
+    const users = await this.usersService.findAll();
+    return users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      status: u.status,
+      mustChangePassword: Boolean(u.mustChangePassword),
+      lastLoginAt: u.lastLoginAt,
+      roles: (u.roles ?? []).map((r) => ({ id: r.id, name: r.name, description: r.description })),
+    }));
   }
 
   @Post()
   @Roles('ADMIN')
-  create(
+  async create(
     @Body() dto: CreateUserDto,
     @Req() request: { user: { id: number } },
   ) {
-    return this.usersService.create(dto, request.user.id);
+    const { user, temporaryPassword } = await this.usersService.create(dto, request.user.id);
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      status: user.status,
+      mustChangePassword: user.mustChangePassword,
+      roles: (user.roles ?? []).map((r) => r.name),
+      temporaryPassword,
+    };
+  }
+
+  @Post(':id/temporary-password')
+  @Roles('ADMIN')
+  async generateTemporaryPassword(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request: { user: { id: number } },
+  ) {
+    return this.usersService.resetToTemporaryPassword(id, request.user.id);
   }
 
   @Patch(':id/status')

@@ -14,6 +14,8 @@ import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import MultiSelect from 'primevue/multiselect';
 import Message from 'primevue/message';
+import Tag from 'primevue/tag';
+import Checkbox from 'primevue/checkbox';
 
 import {
   useToast,
@@ -69,6 +71,8 @@ interface UserRow {
   |
   'INACTIVE';
 
+  mustChangePassword?: boolean;
+
   roles:
   UserRole[];
 }
@@ -113,6 +117,48 @@ const dialogVisible =
 const creating =
   ref(false);
 
+const useAutoTemporaryPassword = ref(true);
+const tempPasswordDialogVisible = ref(false);
+const createdUserData = ref<{ name: string; email: string; password: string } | null>(null);
+const copied = ref(false);
+
+async function copyTemporaryPassword() {
+  if (!createdUserData.value?.password) return;
+  try {
+    await navigator.clipboard.writeText(createdUserData.value.password);
+    copied.value = true;
+    setTimeout(() => { copied.value = false; }, 3000);
+  } catch {
+    /* ignore fallback */
+  }
+}
+
+async function resetTemporaryPassword(user: UserRow) {
+  try {
+    const response = await api.post<{ temporaryPassword: string }>(`/users/${user.id}/temporary-password`);
+    createdUserData.value = {
+      name: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      password: response.data.temporaryPassword,
+    };
+    tempPasswordDialogVisible.value = true;
+    await loadUsers();
+    toast.add({
+      severity: 'info',
+      summary: 'Mot de passe temporaire',
+      detail: `Un mot de passe temporaire a été généré pour ${user.firstName} ${user.lastName}.`,
+      life: 5000,
+    });
+  } catch (err: unknown) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail: apiError(err, 'Impossible de générer le mot de passe temporaire.'),
+      life: 4000,
+    });
+  }
+}
+
 const error =
   ref('');
 
@@ -137,6 +183,7 @@ const form =
 // Reset on opening and closing, including cancellation.
 watch(dialogVisible, () => {
   form.value = { firstName: '', lastName: '', email: '', password: '', roles: [] };
+  useAutoTemporaryPassword.value = true;
   error.value = '';
 }, { flush: 'sync' });
 
@@ -337,7 +384,7 @@ async function createUser() {
   error.value =
     '';
 
-  if (!passwordValid.value) {
+  if (!useAutoTemporaryPassword.value && !passwordValid.value) {
     error.value = 'Le mot de passe ne respecte pas toutes les règles de sécurité.';
     return;
   }
@@ -346,9 +393,18 @@ async function createUser() {
     true;
 
   try {
-    await api.post(
+    const payload = {
+      firstName: form.value.firstName,
+      lastName: form.value.lastName,
+      email: form.value.email,
+      roles: form.value.roles,
+      temporaryPassword: useAutoTemporaryPassword.value,
+      ...(useAutoTemporaryPassword.value ? {} : { password: form.value.password }),
+    };
+
+    const response = await api.post(
       '/users',
-      form.value,
+      payload,
     );
 
     dialogVisible.value =
@@ -373,19 +429,28 @@ async function createUser() {
 
     await loadUsers();
 
-    toast.add({
-      severity:
-        'success',
+    if (response.data?.temporaryPassword) {
+      createdUserData.value = {
+        name: `${response.data.firstName} ${response.data.lastName}`,
+        email: response.data.email,
+        password: response.data.temporaryPassword,
+      };
+      tempPasswordDialogVisible.value = true;
+    } else {
+      toast.add({
+        severity:
+          'success',
 
-      summary:
-        'Utilisateur créé',
+        summary:
+          'Utilisateur créé',
 
-      detail:
-        'Le compte a été créé avec succès.',
+        detail:
+          'Le compte a été créé avec succès.',
 
-      life:
-        5000,
-    });
+        life:
+          5000,
+      });
+    }
   } catch (
   err:
     unknown
@@ -493,8 +558,8 @@ async function saveRoles() {
             role.name,
         );
 
-      localStorage.setItem(
-        'current_user',
+      sessionStorage.setItem(
+        'veille_current_user',
         JSON.stringify(
           auth.user,
         ),
@@ -702,10 +767,12 @@ onMounted(
           </Column>
 
 
-          <Column header="Statut" style="width: 8rem">
+          <Column header="Statut" style="min-width: 9rem">
             <template #body="{ data }">
-              <StatusBadge :status="data.status
-                " />
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <StatusBadge :status="data.status" />
+                <Tag v-if="data.mustChangePassword" value="MDP temp." severity="warn" class="text-xs font-semibold" title="Changement obligatoire du mot de passe à la prochaine connexion" />
+              </div>
             </template>
           </Column>
 
@@ -720,6 +787,13 @@ onMounted(
                 <Button icon="pi pi-user-edit" severity="secondary" rounded size="small" aria-label="Modifier les rôles"
                   title="Modifier les rôles" @click="
                     editRoles(
+                      data,
+                    )
+                    " />
+
+                <Button icon="pi pi-key" severity="warn" rounded size="small" aria-label="Générer un mot de passe temporaire"
+                  title="Générer un mot de passe temporaire" @click="
+                    resetTemporaryPassword(
                       data,
                     )
                     " />
@@ -900,15 +974,27 @@ onMounted(
           </div>
 
 
-          <div>
+          <div class="p-3 bg-amber-50/70 rounded-lg border border-amber-200">
+            <div class="flex items-center gap-2">
+              <Checkbox v-model="useAutoTemporaryPassword" inputId="auto-temp-pwd" :binary="true" />
+              <label for="auto-temp-pwd" class="text-sm font-semibold cursor-pointer text-slate-800">
+                Générer un mot de passe temporaire aléatoire (recommandé)
+              </label>
+            </div>
+            <p class="text-xs text-slate-600 mt-1 pl-6">
+              Le mot de passe sécurisé vous sera affiché dès la validation pour transmission. L’utilisateur sera forcé de le changer à sa première connexion.
+            </p>
+          </div>
+
+          <div v-if="!useAutoTemporaryPassword">
             <label class="required-label mb-2 block">
-              Mot de passe
+              Mot de passe initial
             </label>
 
             <Password v-model="form.password
               " :feedback="false
                 " :input-props="{ name: 'new-user-password', autocomplete: 'new-password' }" toggle-mask fluid
-              required />
+              :required="!useAutoTemporaryPassword" />
 
             <div class="password-strength" :class="passwordStrength.className">
               <div class="password-strength-head">
@@ -959,6 +1045,48 @@ onMounted(
 
     </div>
 
+
+    <!-- Dialog d'affichage du mot de passe temporaire -->
+    <Dialog v-model:visible="tempPasswordDialogVisible" modal header="Mot de passe temporaire généré" class="w-full max-w-lg">
+      <div class="space-y-4">
+        <div class="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-sm">
+          <p class="font-semibold flex items-center gap-1.5">
+            <i class="pi pi-shield text-amber-600"></i>
+            Mot de passe à usage unique
+          </p>
+          <p class="text-xs mt-1 text-amber-800">
+            L'utilisateur sera <strong>obligé de choisir un nouveau mot de passe</strong> lors de sa première connexion avant d'accéder à l'application.
+          </p>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded border">
+          <div class="text-xs text-slate-500 mb-1">Compte concerné :</div>
+          <div class="font-semibold text-slate-900">{{ createdUserData?.name }}</div>
+          <div class="text-xs text-slate-600 font-mono">{{ createdUserData?.email }}</div>
+        </div>
+
+        <div>
+          <div class="text-xs text-slate-500 mb-1.5 font-medium">Mot de passe temporaire :</div>
+          <div class="flex items-center gap-2">
+            <code class="temp-pwd-box">{{ createdUserData?.password }}</code>
+            <Button
+              :icon="copied ? 'pi pi-check' : 'pi pi-copy'"
+              :label="copied ? 'Copié !' : 'Copier'"
+              :severity="copied ? 'success' : 'secondary'"
+              @click="copyTemporaryPassword"
+            />
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-500 italic">
+          Transmettez ce mot de passe de façon sécurisée à l'utilisateur. Pour des raisons de sécurité, il ne sera plus affiché après la fermeture de cette boîte.
+        </p>
+      </div>
+
+      <template #footer>
+        <Button label="Fermer" severity="primary" @click="tempPasswordDialogVisible = false" />
+      </template>
+    </Dialog>
   </AppLayout>
 </template>
 
@@ -1155,4 +1283,21 @@ onMounted(
     grid-template-columns: 1fr;
   }
 }
+
+.temp-pwd-box {
+  display: block;
+  flex: 1;
+  background: var(--app-surface-muted, #f8fafc);
+  border: 1px solid var(--app-border, #cbd5e1);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-family: monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--app-primary, #1e40af);
+  letter-spacing: 0.05em;
+  user-select: all;
+  text-align: center;
+}
+
 </style>

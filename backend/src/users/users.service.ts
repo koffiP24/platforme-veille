@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'node:crypto';
 
 import { Role } from '../roles/entities/role.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -68,7 +69,33 @@ export class UsersService {
       .getOne();
   }
 
-  async create(dto: CreateUserDto, actorId?: number) {
+  generateTemporaryPassword(length = 16): string {
+    const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowers = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const specials = '!@#$%&*?';
+    const all = uppers + lowers + digits + specials;
+
+    const chars = [
+      uppers[crypto.randomInt(uppers.length)],
+      lowers[crypto.randomInt(lowers.length)],
+      digits[crypto.randomInt(digits.length)],
+      specials[crypto.randomInt(specials.length)],
+    ];
+
+    while (chars.length < length) {
+      chars.push(all[crypto.randomInt(all.length)]);
+    }
+
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+
+    return chars.join('');
+  }
+
+  async create(dto: CreateUserDto, actorId?: number): Promise<{ user: User; temporaryPassword?: string }> {
     const existing = await this.userRepository.findOne({
       where: {
         email: dto.email.toLowerCase(),
@@ -89,7 +116,17 @@ export class UsersService {
       throw new BadRequestException('Un ou plusieurs rôles sont invalides');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    let finalPassword = dto.password;
+    let temporaryPassword: string | undefined;
+    let mustChangePassword = false;
+
+    if (!finalPassword || dto.temporaryPassword) {
+      temporaryPassword = this.generateTemporaryPassword(16);
+      finalPassword = temporaryPassword;
+      mustChangePassword = true;
+    }
+
+    const passwordHash = await bcrypt.hash(finalPassword, 12);
 
     const user = this.userRepository.create({
       firstName: dto.firstName,
@@ -97,6 +134,7 @@ export class UsersService {
       email: dto.email.toLowerCase(),
       passwordHash,
       status: 'ACTIVE',
+      mustChangePassword,
       roles,
     });
 
@@ -108,7 +146,30 @@ export class UsersService {
       entityId: saved.id,
       afterValue: this.auditSnapshot(saved),
     });
-    return saved;
+    return { user: saved, temporaryPassword };
+  }
+
+  async resetToTemporaryPassword(id: number, actorId: number): Promise<{ temporaryPassword: string }> {
+    const user = await this.findById(id);
+    const temporaryPassword = this.generateTemporaryPassword(16);
+    user.passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    user.mustChangePassword = true;
+
+    await this.userRepository.save(user);
+
+    await this.auditService.log({
+      userId: actorId,
+      action: 'RESET_USER_PASSWORD_TEMPORARY',
+      entity: 'users',
+      entityId: user.id,
+      afterValue: { mustChangePassword: true },
+    });
+
+    return { temporaryPassword };
+  }
+
+  async saveUser(user: User): Promise<User> {
+    return this.userRepository.save(user);
   }
 
   async updateLastLogin(id: number) {
@@ -190,6 +251,7 @@ export class UsersService {
       lastName: user.lastName,
       email: user.email,
       status: user.status,
+      mustChangePassword: user.mustChangePassword,
       roles: user.roles?.map((role) => role.name) ?? [],
     };
   }

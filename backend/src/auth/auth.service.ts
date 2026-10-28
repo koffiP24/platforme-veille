@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,8 +10,10 @@ import { LessThan, Repository } from 'typeorm';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { RefreshSession } from './entities/refresh-session.entity';
 import { jwtTtlSeconds } from './session-config';
+import { AuditService } from '../audit/audit.service';
 
 type RefreshPayload = { sub: number; jti: string; type: 'refresh' };
 
@@ -25,6 +27,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly auditService: AuditService,
     @InjectRepository(RefreshSession)
     private readonly sessions: Repository<RefreshSession>,
   ) {
@@ -46,6 +49,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       roles: roleNames,
+      mustChangePassword: user.mustChangePassword,
       type: 'access',
     }, { expiresIn: this.accessTtlSeconds });
     const sessionId = randomUUID();
@@ -97,6 +101,60 @@ export class AuthService {
         lastName: user.lastName,
         email: user.email,
         roles: user.roles.map((role) => role.name),
+        mustChangePassword: user.mustChangePassword,
+      },
+    };
+  }
+
+  async changePassword(userId: number, dto: ChangePasswordDto, ipAddress?: string) {
+    const user = await this.usersService.findById(userId);
+    const userWithPassword = await this.usersService.findByEmailWithPassword(user.email);
+    if (!userWithPassword) {
+      throw new UnauthorizedException('Utilisateur introuvable.');
+    }
+
+    const matches = await bcrypt.compare(dto.currentPassword, userWithPassword.passwordHash);
+    if (!matches) {
+      throw new BadRequestException('Le mot de passe actuel est incorrect.');
+    }
+
+    if (dto.currentPassword === dto.newPassword) {
+      throw new BadRequestException(
+        'Le nouveau mot de passe doit être différent du mot de passe actuel.',
+      );
+    }
+
+    userWithPassword.passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    userWithPassword.mustChangePassword = false;
+    const saved = await this.usersService.saveUser(userWithPassword);
+
+    await this.sessions.delete({ user: { id: user.id } });
+
+    const tokens = await this.signTokens(saved);
+    await this.sessions.save(this.sessions.create({
+      id: tokens.sessionId,
+      tokenHash: this.tokenHash(tokens.refreshToken),
+      expiresAt: new Date(Date.now() + this.refreshTtlSeconds * 1000),
+      user: saved,
+    }));
+
+    await this.auditService.log({
+      userId: user.id,
+      action: 'CHANGE_PASSWORD',
+      entity: 'users',
+      entityId: user.id,
+      ipAddress: ipAddress ?? undefined,
+    });
+
+    return {
+      tokens,
+      user: {
+        id: saved.id,
+        firstName: saved.firstName,
+        lastName: saved.lastName,
+        email: saved.email,
+        roles: saved.roles.map((role) => role.name),
+        mustChangePassword: false,
       },
     };
   }
