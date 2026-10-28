@@ -156,6 +156,14 @@ const displayedTitle = computed(() => {
     if (displayLanguage.value === 'en') return item.value.englishTitle ?? item.value.title;
     return item.value.frenchTitle ?? item.value.title;
 });
+const displayedTitleHtml = computed(() => displayedTitle.value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/&lt;em&gt;/gi, '<em>')
+    .replace(/&lt;\/em&gt;/gi, '</em>'));
 const displayedSummary = computed(() => {
     if (!item.value) return null;
     if (displayLanguage.value === 'original') return item.value.originalSummary ?? item.value.summary;
@@ -1793,7 +1801,7 @@ onMounted(
                                     </span>
 
                                     <h2>
-                                        {{ displayedTitle }}
+                                        <span v-html="displayedTitleHtml" />
                                     </h2>
 
                                     <div v-if="availableDisplayLanguages.length" class="language-switch" aria-label="Langue du contenu">

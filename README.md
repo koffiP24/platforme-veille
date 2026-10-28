@@ -847,6 +847,8 @@ Formats disponibles :
 - XLSX ;
 - CSV.
 
+La page présente l’historique sous forme de cartes avec la périodicité, la période couverte, le format, le statut, la date de génération et l’action de téléchargement.
+
 Les fichiers sont enregistrés sous :
 
 ```text
@@ -859,7 +861,7 @@ backend/storage/reports/
 
 ## 29. Journal d’audit
 
-Le journal permet de tracer les opérations importantes de l’application. La page charge les 500 opérations les plus récentes ; la pagination de l’interface ne limite que leur affichage par page. Les détails présentent les champs modifiés et prennent aussi en charge les instantanés sous forme de listes ou de valeurs simples.
+Le journal permet de tracer les opérations importantes de l’application. La page est paginée côté serveur ; elle donne le total réel et permet de parcourir jusqu’aux 500 opérations les plus récentes, par groupe. Chaque requête ne charge qu’une page. Les détails présentent les champs modifiés et prennent aussi en charge les instantanés sous forme de listes ou de valeurs simples.
 
 Il trace notamment :
 
@@ -895,12 +897,15 @@ La page de santé permet notamment de vérifier :
 | POST | `/api/v1/auth/login` | Connexion |
 | POST | `/api/v1/auth/change-password` | Changer le mot de passe (obligatoire si temporaire) |
 | POST | `/api/v1/auth/forgot-password` | Demander un lien de réinitialisation par e-mail |
+| POST | `/api/v1/auth/validate-reset-token` | Vérifier qu’un lien de réinitialisation est valide avant d’afficher le formulaire |
 | POST | `/api/v1/auth/reset-password` | Définir un nouveau mot de passe avec le lien reçu |
 | POST | `/api/v1/auth/refresh` | Renouveler les cookies de session |
 | POST | `/api/v1/auth/logout` | Déconnexion |
 | GET | `/api/v1/auth/me` | Profil connecté |
 
-Le lien de réinitialisation expire après 15 minutes et ne peut être utilisé qu'une fois. Seule l'empreinte SHA-256 du jeton est enregistrée en base. La réponse à la demande de lien est identique pour une adresse connue ou inconnue. Après le changement de mot de passe, les sessions de rafraîchissement existantes sont supprimées, une entrée sans donnée secrète est ajoutée au journal d'audit et un e-mail de confirmation est envoyé sans inclure le mot de passe. L'échec de l'envoi est journalisé sans annuler le changement déjà enregistré. Exécuter la migration `AddPasswordResetTokens` avant de déployer cette fonction. La route `/api/v1/auth/change-password` permet le changement de mot de passe d'un utilisateur connecté (obligatoire lors de la première connexion avec mot de passe temporaire) et enregistre l'action au journal d'audit. Si SMTP est absent ou en erreur lors de la demande de lien, le backend journalise l'échec sans révéler l'existence du compte à l'appelant.
+Le lien de réinitialisation expire après 15 minutes et ne peut être utilisé qu’une fois. Seule l’empreinte SHA-256 du jeton est enregistrée en base. La page vérifie le jeton à son ouverture et masque le formulaire si le lien est invalide, expiré ou déjà utilisé ; le serveur le vérifie à nouveau lors de la soumission. La route `/api/v1/auth/forgot-password` renvoie un message général et inclut aussi `accountExists` : `true` pour un compte actif, `false` sinon. La page affiche une confirmation verte dans le premier cas et un message rouge indiquant qu’aucun compte actif n’existe pour cette adresse dans le second. Cette information permet d’énumérer les adresses associées à des comptes ; conserver ce comportement seulement si cette divulgation est acceptable pour le contexte de déploiement. Après le changement de mot de passe, les sessions de rafraîchissement existantes sont supprimées, une entrée sans donnée secrète est ajoutée au journal d’audit et un e-mail de confirmation est envoyé sans inclure le mot de passe. L’échec de l’envoi est journalisé sans annuler le changement déjà enregistré. Exécuter la migration `AddPasswordResetTokens` avant de déployer cette fonction. La route `/api/v1/auth/change-password` permet le changement de mot de passe d’un utilisateur connecté (obligatoire lors de la première connexion avec mot de passe temporaire) et enregistre l’action au journal d’audit. Si SMTP est absent ou en erreur, le backend journalise l’échec.
+
+Depuis la page de récupération, le lien de retour ouvre la connexion dans l’onglet courant même si une session existe déjà ; il ne déconnecte pas les autres onglets.
 
 ## 32. Utilisateurs / rôles
 
@@ -992,6 +997,8 @@ npm run test:e2e
 npm run test:cov
 ```
 
+Vérification effectuée le 28 octobre 2026 : `npm test` passe avec 76 tests dans 24 fichiers et `npm run build` réussit.
+
 ## 37. Frontend
 
 Depuis `frontend/` :
@@ -1001,6 +1008,8 @@ npm run build
 npm test
 npm run preview
 ```
+
+Vérification effectuée le 28 octobre 2026 : `npm test` passe avec 8 tests dans 5 fichiers et `npm run build` réussit.
 
 ## Vérification locale de sécurité
 

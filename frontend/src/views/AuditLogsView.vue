@@ -113,6 +113,10 @@ type AuditGroup =
 const logs =
   ref<AuditLog[]>([]);
 
+const totalLogs = ref(0);
+const firstRow = ref(0);
+const pageSize = ref(20);
+
 const loading =
   ref(false);
 
@@ -284,41 +288,6 @@ const auditGroups:
         ],
     },
   ];
-
-
-const filteredLogs =
-  computed(
-    () => {
-      const group =
-        auditGroups.find(
-          (
-            item,
-          ) =>
-            item.key ===
-            activeGroup.value,
-        );
-
-
-      if (
-        !group
-        ||
-        group.key ===
-        'all'
-      ) {
-        return logs.value;
-      }
-
-
-      return logs.value.filter(
-        (
-          log,
-        ) =>
-          group.entities.includes(
-            log.entity,
-          ),
-      );
-    },
-  );
 
 
 const actionLabels:
@@ -1449,7 +1418,7 @@ function showDetails(
 }
 
 
-async function load() {
+async function load(page = Math.floor(firstRow.value / pageSize.value)) {
   loading.value =
     true;
 
@@ -1464,7 +1433,7 @@ async function load() {
       watchItemsResult,
     ] =
       await Promise.allSettled([
-        getAuditLogs(),
+        getAuditLogs<AuditLog>({ page, limit: pageSize.value, group: activeGroup.value }),
         getUsers(),
         getWatchItems(),
       ]);
@@ -1478,8 +1447,9 @@ async function load() {
     }
 
 
-    logs.value =
-      auditResult.value.data;
+    logs.value = auditResult.value.data.items;
+    totalLogs.value = auditResult.value.data.total;
+    firstRow.value = auditResult.value.data.page * pageSize.value;
 
 
     if (
@@ -1531,6 +1501,18 @@ async function load() {
   }
 }
 
+function selectGroup(group: AuditGroup) {
+  activeGroup.value = group;
+  firstRow.value = 0;
+  void load(0);
+}
+
+function changePage(event: { page: number; first: number; rows: number }) {
+  firstRow.value = event.first;
+  pageSize.value = event.rows;
+  void load(event.page);
+}
+
 
 onMounted(
   load,
@@ -1564,29 +1546,29 @@ group in
             active:
               activeGroup ===
               group.key,
-          }" @click="
-            activeGroup =
-            group.key
-            ">
+          }" @click="selectGroup(group.key)">
           {{ group.label }}
         </button>
 
       </nav>
 
 
-      <SectionCard :title="`${filteredLogs.length} opération${filteredLogs.length > 1 ? 's' : ''}`
-        " subtitle="Toutes les actions importantes réalisées dans l’application." icon="pi pi-list">
+      <SectionCard :title="`${totalLogs} opération${totalLogs > 1 ? 's' : ''}${totalLogs > 500 ? ' au total' : ''}`
+        " :subtitle="totalLogs > 500 ? 'Affichage des 500 opérations les plus récentes maximum.' : 'Toutes les actions importantes réalisées dans l’application.'" icon="pi pi-list">
 
-        <DataTable :key="activeGroup
-          " :value="filteredLogs
-            " :loading="loading
-            " paginator :rows="20
-            " :rows-per-page-options="[
-              10,
-              20,
-              50,
-            ]
-            " size="small">
+        <DataTable
+          :key="activeGroup"
+          :value="logs"
+          :loading="loading"
+          paginator
+          lazy
+          :first="firstRow"
+          :rows="pageSize"
+          :total-records="Math.min(totalLogs, 500)"
+          :rows-per-page-options="[10, 20, 50]"
+          size="small"
+          @page="changePage"
+        >
 
           <template #empty>
             Aucune opération enregistrée dans cette partie.

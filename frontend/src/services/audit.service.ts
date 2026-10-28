@@ -1,8 +1,16 @@
 import api from './api';
 
-export function getAuditLogs() {
-  return api.get('/audit', {
-    params: { actualisation: Date.now() },
+export interface AuditPage<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  capped: boolean;
+}
+
+export function getAuditLogs<T>(params: { page: number; limit: number; group: string }) {
+  return api.get<AuditPage<T>>('/audit', {
+    params: { ...params, actualisation: Date.now() },
     headers: { 'Cache-Control': 'no-cache' },
   });
 }

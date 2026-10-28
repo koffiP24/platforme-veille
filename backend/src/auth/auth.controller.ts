@@ -15,6 +15,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ValidateResetTokenDto } from './dto/validate-reset-token.dto';
 import { PasswordResetService } from './password-reset.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -72,6 +73,11 @@ export class AuthController {
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto, @Req() request: ExpressRequest) {
     return this.passwordResetService.resetPassword(dto.token, dto.newPassword, request.ip);
+  }
+
+  @Post('validate-reset-token')
+  validateResetToken(@Body() dto: ValidateResetTokenDto) {
+    return this.passwordResetService.validateResetToken(dto.token);
   }
 
   @UseGuards(JwtAuthGuard)

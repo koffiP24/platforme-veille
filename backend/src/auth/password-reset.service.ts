@@ -29,6 +29,17 @@ export class PasswordResetService {
     return createHash('sha256').update(token).digest('hex');
   }
 
+  async validateResetToken(token: string): Promise<{ valid: boolean }> {
+    const reset = await this.tokens.findOne({
+      where: {
+        tokenHash: this.hash(token.toLowerCase()),
+        expiresAt: MoreThan(new Date()),
+      },
+      select: { tokenHash: true },
+    });
+    return { valid: Boolean(reset) };
+  }
+
   async forgotPassword(email: string) {
     const startedAt = Date.now();
     const user = await this.users.createQueryBuilder('user')
@@ -57,7 +68,7 @@ export class PasswordResetService {
     if (remaining > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, remaining));
     }
-    return { message: REQUEST_MESSAGE };
+    return { message: REQUEST_MESSAGE, accountExists: user?.status === 'ACTIVE' };
   }
 
   private async deliverMail(email: string, token: string, tokenHash: string) {
@@ -122,7 +133,7 @@ export class PasswordResetService {
         action: 'RESET_PASSWORD',
         entity: 'users',
         entityId: user.id,
-        user,
+        user: { id: user.id } as User,
         ipAddress: ipAddress ?? null,
       });
       return user.email;

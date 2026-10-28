@@ -5,6 +5,7 @@ export interface SearchParams {
   criticality?: string;
   watchType?: string;
   sourceType?: string;
+  aiQualified?: boolean;
   sourceId?: number;
   domainId?: number;
   laboratoryId?: number;

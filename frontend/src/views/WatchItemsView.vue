@@ -101,6 +101,17 @@ function queryValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function titleHtml(title: string): string {
+  return title
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/&lt;em&gt;/gi, '<em>')
+    .replace(/&lt;\/em&gt;/gi, '</em>');
+}
+
 function queryNumber(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = Number(queryValue(value));
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
@@ -564,6 +575,13 @@ const filters =
     sourceType:
       queryValue(initialListQuery.sourceType),
 
+    aiQualified:
+      initialListQuery.aiQualified === 'true'
+        ? true
+        : initialListQuery.aiQualified === 'false'
+          ? false
+          : undefined,
+
     addedOrder:
       querySortOrder(initialListQuery.addedOrder),
 
@@ -596,6 +614,10 @@ function listStateQuery() {
 
   for (const key of ['q', 'status', 'criticality', 'watchType', 'sourceType'] as const) {
     if (filters.value[key]) query[key] = filters.value[key];
+  }
+
+  if (filters.value.aiQualified !== undefined) {
+    query.aiQualified = String(filters.value.aiQualified);
   }
 
   if (filters.value.favoritesOnly) query.favorites = '1';
@@ -652,6 +674,12 @@ const sourceTypeOptions =
     'ATOM',
     'IMPORT_MANUEL',
   ]);
+
+
+const aiQualificationOptions = [
+  { label: 'Qualification IA générée', value: true },
+  { label: 'Qualification IA non générée', value: false },
+];
 
 
 const addedOrderOptions = [
@@ -871,6 +899,7 @@ async function load() {
           criticality: filters.value.criticality,
           watchType: filters.value.watchType,
           sourceType: filters.value.sourceType,
+          aiQualified: filters.value.aiQualified,
           page: filters.value.page,
           limit: filters.value.limit,
           sortBy: filters.value.sortBy,
@@ -1305,6 +1334,9 @@ function resetFilters() {
     sourceType:
       '',
 
+    aiQualified:
+      undefined,
+
     addedOrder:
       'DESC',
 
@@ -1416,6 +1448,7 @@ watch(
     filters.value.criticality,
     filters.value.watchType,
     filters.value.sourceType,
+    filters.value.aiQualified,
     filters.value.addedOrder,
     filters.value.sortBy,
     filters.value.sortOrder,
@@ -1536,6 +1569,13 @@ onBeforeUnmount(() => {
             <Select append-to="self" v-model="filters.sourceType
               " :options="sourceTypeOptions
                 " option-label="label" option-value="value" show-clear placeholder="Type de source" class="w-full" />
+          </div>
+
+
+          <div class="select-host">
+            <Select append-to="self" v-model="filters.aiQualified"
+              :options="aiQualificationOptions" option-label="label" option-value="value" show-clear
+              placeholder="Qualification IA" class="w-full" />
           </div>
 
 
@@ -1670,7 +1710,7 @@ view in
             <template #body="{ data }">
 
               <button type="button" class="title-link" @click="openWatchItem(data.id)">
-                {{ data.title }}
+                <span v-html="titleHtml(data.title)" />
               </button>
 
             </template>

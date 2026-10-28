@@ -15,7 +15,10 @@ describe('PasswordResetService', () => {
   query.select.mockReturnValue(query);
   query.where.mockReturnValue(query);
   const users = { createQueryBuilder: vi.fn(() => query) };
-  const tokens = { delete: vi.fn().mockResolvedValue({ affected: 1 }) };
+  const tokens = {
+    delete: vi.fn().mockResolvedValue({ affected: 1 }),
+    findOne: vi.fn(),
+  };
   const resetRepo = {
     delete: vi.fn().mockResolvedValue({ affected: 1 }),
     save: vi.fn().mockResolvedValue(undefined),
@@ -50,16 +53,19 @@ describe('PasswordResetService', () => {
     vi.clearAllMocks();
     query.getOne.mockResolvedValue(user);
     resetRepo.findOne.mockResolvedValue(null);
+    tokens.findOne.mockResolvedValue(null);
     userRepo.findOne.mockResolvedValue({ ...user, passwordHash: await bcrypt.hash('CurrentPassword123!', 4) });
     userRepo.update.mockResolvedValue({ affected: 1 });
   });
 
-  it('donne la même réponse pour un compte inconnu et n’envoie aucun lien', async () => {
+  it('indique si un compte actif existe et n’envoie aucun lien pour une adresse inconnue', async () => {
     query.getOne.mockResolvedValue(null);
     const unknown = await service.forgotPassword('absent@example.org');
     query.getOne.mockResolvedValue(user);
     const known = await service.forgotPassword(user.email);
-    expect(unknown).toEqual(known);
+    expect(unknown).toEqual(expect.objectContaining({ accountExists: false }));
+    expect(known).toEqual(expect.objectContaining({ accountExists: true }));
+    expect(unknown.message).toEqual(known.message);
     expect(mail.sendPasswordReset).toHaveBeenCalledOnce();
     expect(resetRepo.save).toHaveBeenCalledWith(expect.objectContaining({
       userId: user.id,
@@ -74,6 +80,28 @@ describe('PasswordResetService', () => {
     expect(userRepo.update).not.toHaveBeenCalled();
     expect(mail.sendPasswordChanged).not.toHaveBeenCalled();
     expect(auditRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('valide uniquement un jeton de réinitialisation encore actif', async () => {
+    const token = 'e'.repeat(64);
+    tokens.findOne.mockResolvedValueOnce({ tokenHash: createHash('sha256').update(token).digest('hex') });
+    await expect(service.validateResetToken(token)).resolves.toEqual({ valid: true });
+    await expect(service.validateResetToken('f'.repeat(64))).resolves.toEqual({ valid: false });
+    expect(tokens.findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        tokenHash: createHash('sha256').update(token).digest('hex'),
+        expiresAt: MoreThan(expect.any(Date)),
+      }),
+    }));
+  });
+
+  it('refuse un nouveau mot de passe déjà présent dans l’historique', async () => {
+    const token = 'a'.repeat(64);
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    resetRepo.findOne.mockResolvedValueOnce({ tokenHash, userId: user.id, expiresAt: new Date(Date.now() + 60_000) });
+    historyRepo.find.mockResolvedValueOnce([{ passwordHash: await bcrypt.hash('PreviouslyUsed123!', 4) }]);
+    await expect(service.resetPassword(token, 'PreviouslyUsed123!')).rejects.toBeInstanceOf(BadRequestException);
+    expect(userRepo.update).not.toHaveBeenCalled();
   });
 
   it('garde une réponse neutre si le courriel échoue et supprime le lien inutilisable', async () => {
@@ -100,7 +128,7 @@ describe('PasswordResetService', () => {
       action: 'RESET_PASSWORD',
       entity: 'users',
       entityId: user.id,
-      user,
+      user: { id: user.id },
       ipAddress: null,
     });
     expect(mail.sendPasswordChanged).toHaveBeenCalledExactlyOnceWith(user.email);

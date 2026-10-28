@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import Button from 'primevue/button';
 import Password from 'primevue/password';
@@ -15,6 +15,7 @@ const confirmation = ref('');
 const loading = ref(false);
 const completed = ref(false);
 const error = ref('');
+const tokenStatus = ref<'checking' | 'valid' | 'invalid'>(token ? 'checking' : 'invalid');
 const passwordRules = computed(() => {
   const value = password.value;
   return [
@@ -29,8 +30,20 @@ const passwordRules = computed(() => {
 const validPassword = computed(() => passwordRules.value.every((rule) => rule.valid));
 const passwordsMatch = computed(() => password.value === confirmation.value);
 
+async function validateToken() {
+  if (!token) return;
+  try {
+    const response = await api.post<{ valid: boolean }>('/auth/validate-reset-token', { token });
+    tokenStatus.value = response.data.valid ? 'valid' : 'invalid';
+  } catch {
+    tokenStatus.value = 'invalid';
+  }
+}
+
+onMounted(validateToken);
+
 async function submit() {
-  if (loading.value || !token) return;
+  if (loading.value || !token || tokenStatus.value !== 'valid') return;
   error.value = '';
   if (!validPassword.value) {
     error.value = 'Utilisez au moins 12 caractères, avec majuscule, minuscule, chiffre et caractère spécial.';
@@ -59,10 +72,13 @@ async function submit() {
     <section class="recovery-card">
       <img class="recovery-logo" :src="logo" alt="Logo plateforme de veille" />
       <h1>Nouveau mot de passe</h1>
-      <Message v-if="!token" severity="error">Lien de réinitialisation manquant. Demandez un nouveau lien.</Message>
+      <Message v-if="tokenStatus === 'checking'" severity="info">Vérification du lien de réinitialisation…</Message>
+      <Message v-else-if="tokenStatus === 'invalid'" severity="error">
+        Ce lien est invalide, expiré ou déjà utilisé. Demandez un nouveau lien de réinitialisation.
+      </Message>
       <Message v-if="completed" severity="success">Mot de passe modifié. Vous pouvez vous connecter.</Message>
       <Message v-if="error" severity="error">{{ error }}</Message>
-      <form v-if="token && !completed" @submit.prevent="submit">
+      <form v-if="tokenStatus === 'valid' && !completed" @submit.prevent="submit">
         <label for="new-password">Nouveau mot de passe</label>
         <Password id="new-password" v-model="password" autocomplete="new-password" :feedback="false" toggle-mask fluid required />
         <div class="password-checklist">
@@ -79,7 +95,9 @@ async function submit() {
         <small v-if="confirmation && !passwordsMatch" class="text-danger">Les mots de passe ne correspondent pas.</small>
         <Button type="submit" label="Enregistrer le mot de passe" :loading="loading" :disabled="loading || !validPassword || !passwordsMatch" fluid />
       </form>
-      <RouterLink :to="token ? '/login' : '/forgot-password'">{{ token ? 'Retour à la connexion' : 'Demander un nouveau lien' }}</RouterLink>
+      <RouterLink :to="completed || tokenStatus === 'valid' ? '/login' : '/forgot-password'">
+        {{ completed || tokenStatus === 'valid' ? 'Retour à la connexion' : 'Demander un nouveau lien' }}
+      </RouterLink>
     </section>
   </main>
 </template>

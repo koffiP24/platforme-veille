@@ -7,8 +7,6 @@ import {
 
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
-import Column from 'primevue/column';
-import DataTable from 'primevue/datatable';
 import InputText from 'primevue/inputtext';
 import Message from 'primevue/message';
 import Select from 'primevue/select';
@@ -1017,8 +1015,7 @@ onMounted(
         eyebrow="Diffusion" icon="pi pi-chart-bar" />
 
 
-      <SectionCard title="Générer un rapport"
-        icon="pi pi-file-export">
+      <SectionCard title="Générer un rapport" icon="pi pi-file-export">
 
         <div class="report-form">
 
@@ -1030,8 +1027,9 @@ onMounted(
 
             <div class="select-host">
               <Select append-to="self" id="report-type" v-model="form.reportType
-              " :options="reportTypeOptions
-                " option-label="label" option-value="value" placeholder="Sélectionner une périodicité" class="w-full" />
+                " :options="reportTypeOptions
+                " option-label="label" option-value="value" placeholder="Sélectionner une périodicité"
+                class="w-full" />
             </div>
 
           </div>
@@ -1089,7 +1087,7 @@ onMounted(
               " type="date" class="w-full" :disabled="form.reportType !==
                 'CUSTOM'
                 " :min="form.periodStart
-                " />
+                  " />
 
           </div>
 
@@ -1102,7 +1100,7 @@ onMounted(
 
             <div class="select-host">
               <Select append-to="self" v-model="form.format
-              " :options="formatOptions
+                " :options="formatOptions
                 " placeholder="Format" class="w-full" />
             </div>
 
@@ -1135,7 +1133,8 @@ onMounted(
             {{ form.publishedOnly ? 'Aucune veille publiée pour cette période.' : 'Aucune veille collectée pour cette période.' }}
           </Message>
           <span v-else-if="reportPreviewCount !== null">
-            {{ reportPreviewCount === 1 ? 'Une veille sera incluse.' : `${reportPreviewCount} veilles seront incluses.` }}
+            {{ reportPreviewCount === 1 ? 'Une veille sera incluse.' : `${reportPreviewCount} veilles seront incluses.`
+            }}
           </span>
           <span v-if="reportPreviewError" class="report-preview-error">{{ reportPreviewError }}</span>
         </div>
@@ -1149,8 +1148,8 @@ onMounted(
             || reportPreviewCount === null
             || reportPreviewCount === 0
             " @click="
-            generate
-          ">
+              generate
+            ">
           <template #icon>
             <FileExportIcon size="0.9rem" />
           </template>
@@ -1162,111 +1161,46 @@ onMounted(
       <SectionCard :title="`${reports.length} rapport${reports.length > 1 ? 's' : ''}`
         " subtitle="Historique des rapports générés." icon="pi pi-folder">
 
-        <DataTable :value="reports
-          " :loading="loading
-            " paginator :rows="10
-            ">
+        <div v-if="loading && reports.length === 0" class="reports-empty" role="status">
+          Chargement des rapports…
+        </div>
 
-          <template #empty>
-            Aucun rapport généré pour le moment.
-          </template>
+        <div v-else-if="reports.length === 0" class="reports-empty">
+          Aucun rapport généré pour le moment.
+        </div>
 
-
-          <Column header="Rapport">
-            <template #body="{ data }">
-
-              <div class="report-name">
-
-                <i class="pi pi-file" />
-
-                <strong>
-                  Rapport
-                  {{
-                    labelFr(
-                      data.reportType,
-                    )
-                  }}
-                </strong>
-
+        <div v-else class="reports-grid">
+          <article v-for="report in reports" :key="report.id" class="report-card">
+            <div class="report-card-heading">
+              <div class="report-icon" aria-hidden="true">
+                <i class="pi pi-file-export" />
               </div>
+              <div class="report-title-group">
+                <h3>Rapport {{ labelFr(report.reportType) }}</h3>
+                <span class="report-periodicity">Périodicité {{ labelFr(report.reportType) }}</span>
+              </div>
+              <Tag :value="labelFr(report.status)" :severity="statusSeverity(report.status)" />
+            </div>
 
-            </template>
-          </Column>
+            <div class="report-period">
+              <span class="report-meta-label">P?riode couverte</span>
+              <strong>{{ formatPeriod(report) }}</strong>
+            </div>
 
-
-          <Column header="Périodicité">
-            <template #body="{ data }">
-              {{
-                labelFr(
-                  data.reportType,
-                )
-              }}
-            </template>
-          </Column>
-
-
-          <Column header="Période" style="min-width: 12rem">
-            <template #body="{ data }">
-              <span class="secondary-text">
-                {{
-                  formatPeriod(
-                    data,
-                  )
-                }}
-              </span>
-            </template>
-          </Column>
-
-
-          <Column field="format" header="Format" style="width: 6rem" />
-
-
-          <Column header="Statut" style="width: 8rem">
-            <template #body="{ data }">
-              <Tag :value="labelFr(
-                data.status,
-              )
-                " :severity="statusSeverity(
-                  data.status,
-                )
-                  " />
-            </template>
-          </Column>
-
-
-          <Column header="Généré le">
-            <template #body="{ data }">
-              <span class="secondary-text">
-                {{
-                  formatDate(
-                    data.generatedAt,
-                  )
-                }}
-              </span>
-            </template>
-          </Column>
-
-
-          <Column header="Actions">
-            <template #body="{ data }">
-
-              <Button label="Télécharger" size="small" severity="secondary" :loading="downloading.includes(
-                data.id,
-              )
-                " @click="
-                  download(
-                    data,
-                  )
-                  ">
+            <div class="report-card-footer">
+              <div class="report-meta">
+                <span class="report-format">{{ report.format }}</span>
+                <span>G?n?r? le {{ formatDate(report.generatedAt) }}</span>
+              </div>
+              <Button label="T?l?charger" size="small" severity="secondary"
+                :loading="downloading.includes(report.id)" @click="download(report)">
                 <template #icon>
                   <DownloadIcon size="0.8rem" />
                 </template>
               </Button>
-
-            </template>
-          </Column>
-
-        </DataTable>
+            </div>
+          </article>
+        </div>
 
       </SectionCard>
 
@@ -1387,28 +1321,98 @@ onMounted(
     var(--app-primary);
 }
 
-.report-name {
-  display:
-    flex;
-
-  align-items:
-    center;
-
-  gap:
-    0.45rem;
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: 0.85rem;
 }
 
-.report-name i {
-  color:
-    var(--app-primary);
+.report-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--app-border, rgba(148, 163, 184, 0.18));
+  border-radius: 0.9rem;
+  background: var(--app-surface-raised, rgba(15, 30, 48, 0.55));
 }
 
-.report-name strong {
-  color:
-    var(--app-text);
+.report-card-heading,
+.report-card-footer,
+.report-meta {
+  display: flex;
+  align-items: center;
+}
 
-  font-size:
-    0.74rem;
+.report-card-heading {
+  gap: 0.7rem;
+}
+
+.report-title-group {
+  min-width: 0;
+  flex: 1;
+}
+
+.report-title-group h3 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.report-icon {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--app-primary) 14%, transparent);
+  color: var(--app-primary);
+}
+
+.report-periodicity,
+.report-meta-label {
+  color: var(--app-text-muted);
+  font-size: 0.7rem;
+}
+
+.report-period {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--app-border, rgba(148, 163, 184, 0.14));
+  border-bottom: 1px solid var(--app-border, rgba(148, 163, 184, 0.14));
+}
+
+.report-period strong {
+  color: var(--app-text);
+  font-size: 0.82rem;
+}
+
+.report-card-footer {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.report-meta {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  color: var(--app-text-muted);
+  font-size: 0.68rem;
+}
+
+.report-format {
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-primary) 12%, transparent);
+  color: var(--app-primary);
+  font-weight: 700;
+}
+
+.reports-empty {
+  padding: 2rem 1rem;
+  color: var(--app-text-muted);
+  text-align: center;
 }
 
 .secondary-text {

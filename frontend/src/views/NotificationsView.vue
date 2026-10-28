@@ -338,9 +338,9 @@ onBeforeUnmount(
             activeTab ===
             'unread',
         }" @click="
-            activeTab =
-            'unread'
-            ">
+          activeTab =
+          'unread'
+          ">
           <span>
             Non lues
           </span>
@@ -358,9 +358,9 @@ onBeforeUnmount(
             activeTab ===
             'read',
         }" @click="
-            activeTab =
-            'read'
-            ">
+          activeTab =
+          'read'
+          ">
           <span>
             Lues
           </span>
@@ -412,18 +412,18 @@ onBeforeUnmount(
 
           <article v-for="
 notification in
-                visibleNotifications
+  visibleNotifications
             " :key="notification.id
               " class="notification-item" :class="{
-              unread:
-                !notification.readAt,
-            }">
+                unread:
+                  !notification.readAt,
+              }">
 
             <div class="notification-icon">
 
               <i :class="notification.readAt
-                  ? 'pi pi-envelope-open'
-                  : 'pi pi-envelope'
+                ? 'pi pi-envelope-open'
+                : 'pi pi-envelope'
                 " />
 
             </div>
@@ -453,11 +453,11 @@ notification in
 
 
                 <Tag :value="notification.readAt
-                    ? 'Lue'
-                    : 'Non lue'
+                  ? 'Lue'
+                  : 'Non lue'
                   " :severity="notification.readAt
-                      ? 'secondary'
-                      : 'info'
+                    ? 'secondary'
+                    : 'info'
                     " />
 
               </div>

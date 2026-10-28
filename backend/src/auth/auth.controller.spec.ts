@@ -25,7 +25,7 @@ describe('AuthController', () => {
       providers: [
         { provide: AuthService, useValue: authService },
         { provide: PasswordResetService, useValue: {
-          forgotPassword: vi.fn(), resetPassword: vi.fn(),
+          forgotPassword: vi.fn(), resetPassword: vi.fn(), validateResetToken: vi.fn(),
         } },
       ],
     })

@@ -1,8 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 import { User } from '../users/entities/user.entity';
+import { AuditGroup, AuditQueryDto } from './audit-query.dto';
+
+const MAX_VISIBLE_AUDIT_LOGS = 500;
+const AUDIT_GROUP_ENTITIES: Record<Exclude<AuditGroup, 'all'>, string[]> = {
+  users: ['users'],
+  watch: ['watch_items', 'saved_views'],
+  sources: ['sources', 'connectors', 'collection_runs'],
+  taxonomy: ['topics', 'domains', 'laboratories', 'keywords', 'keyword_synonyms'],
+  actions: ['follow_up_actions'],
+  alerts: ['subscriptions', 'notifications'],
+  reports: ['reports'],
+  access: ['auth'],
+};
 @Injectable()
 export class AuditService {
   constructor(
@@ -34,13 +47,30 @@ export class AuditService {
       }),
     );
   }
-  async list() {
+  async list(query: AuditQueryDto = new AuditQueryDto()) {
+    const groupEntities = query.group && query.group !== 'all'
+      ? AUDIT_GROUP_ENTITIES[query.group]
+      : undefined;
+    const where = groupEntities ? { entity: In(groupEntities) } : undefined;
+    const total = await this.repo.count({ where });
+    const visibleTotal = Math.min(total, MAX_VISIBLE_AUDIT_LOGS);
+    const limit = query.limit ?? 20;
+    const maxPage = Math.max(0, Math.ceil(visibleTotal / limit) - 1);
+    const page = Math.min(query.page ?? 0, maxPage);
     const logs = await this.repo.find({
+      where,
       relations: { user: true },
       order: { createdAt: 'DESC' },
-      take: 500,
+      skip: page * limit,
+      take: limit,
     });
-    return this.withReadableReferences(logs);
+    return {
+      items: await this.withReadableReferences(logs),
+      total,
+      page,
+      limit,
+      capped: total > MAX_VISIBLE_AUDIT_LOGS,
+    };
   }
 
   private async withReadableReferences(logs: AuditLog[]) {

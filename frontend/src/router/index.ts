@@ -207,7 +207,7 @@ router.beforeEach(async (to) => {
     return { name: "dashboard" };
   }
 
-  if (to.name === "login" && auth.isAuthenticated) {
+  if (to.name === "login" && auth.isAuthenticated && to.query.recovery !== "1") {
     return { name: "dashboard" };
   }
   return true;

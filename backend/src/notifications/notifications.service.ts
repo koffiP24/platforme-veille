@@ -19,6 +19,7 @@ export class NotificationsService {
     @InjectRepository(WatchItem) private items: Repository<WatchItem>,
     private readonly mail: NotificationMailService,
   ) {}
+
   @OnEvent('watch-item.published') async onPublished(
     e: WatchItemPublishedEvent,
   ) {

@@ -31,6 +31,10 @@ export class SearchWatchItemsDto {
   })
   @IsBoolean()
   favoritesOnly?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  aiQualified?: boolean;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 20;
   @IsOptional()

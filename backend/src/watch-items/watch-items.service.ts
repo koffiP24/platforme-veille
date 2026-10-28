@@ -82,7 +82,6 @@ export class WatchItemsService {
 
       await this.createVersion(saved, normalized);
       this.aiAnalysis.scheduleAutomaticAnalysis(saved.id);
-
       return 'CREE';
     }
 
