@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: plateforme-veille-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-veille}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - veille_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-veille}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  veille_postgres_data:
+

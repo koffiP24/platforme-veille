@@ -153,6 +153,19 @@ const doneActions =
             ).length,
     );
 
+function isOverdue(action: FollowUpAction) {
+    if (action.status === 'DONE' || !action.dueDate) {
+        return false;
+    }
+    const dueStr = String(action.dueDate).slice(0, 10);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return dueStr < todayStr;
+}
+
+const overdueActions = computed(
+    () => actions.value.filter((action) => isOverdue(action)).length,
+);
+
 
 function formatDate(
     value:
@@ -390,6 +403,24 @@ onMounted(
 
                 </div>
 
+                <div class="stat-item">
+
+                    <span class="stat-icon overdue">
+                        <i class="pi pi-exclamation-triangle" />
+                    </span>
+
+                    <div>
+                        <strong>
+                            {{ overdueActions }}
+                        </strong>
+
+                        <span>
+                            En retard
+                        </span>
+                    </div>
+
+                </div>
+
             </div>
 
 
@@ -461,15 +492,18 @@ onMounted(
                     </Column>
 
 
-                    <Column header="Échéance" style="width: 9rem">
+                    <Column header="Échéance" style="width: 11rem">
                         <template #body="{ data }">
-                            <span class="date-text">
-                                {{
-                                    formatDate(
-                                        data.dueDate,
-                                    )
-                                }}
-                            </span>
+                            <div class="due-date-cell">
+                                <span class="date-text">
+                                    {{
+                                        formatDate(
+                                            data.dueDate,
+                                        )
+                                    }}
+                                </span>
+                                <Tag v-if="isOverdue(data)" value="En retard" severity="danger" />
+                            </div>
                         </template>
                     </Column>
 
@@ -650,7 +684,7 @@ onMounted(
         grid;
 
     grid-template-columns:
-        repeat(3,
+        repeat(4,
             minmax(0,
                 1fr));
 
@@ -720,6 +754,21 @@ onMounted(
 
     color:
         #34d399;
+}
+
+.stat-icon.overdue {
+    background:
+        rgb(239 68 68 / 0.14);
+
+    color:
+        #f87171;
+}
+
+.due-date-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
 }
 
 .stat-item strong {

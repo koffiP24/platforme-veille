@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { FollowUpAction } from './entities/follow-up-action.entity';
@@ -191,6 +192,46 @@ export class ActionsService {
       },
     });
     return { count };
+  }
+
+  @Interval(3_600_000)
+  async notifyOverdueActions(referenceDate = new Date()) {
+    const today = referenceDate.toISOString().slice(0, 10);
+    const pendingActions = await this.actionRepository.find({
+      where: { status: In(['OPEN', 'IN_PROGRESS']) },
+      relations: { watchItem: true, owner: true },
+    });
+    const overdueActions = pendingActions.filter(
+      (action) => Boolean(action.dueDate) && String(action.dueDate).slice(0, 10) < today,
+    );
+    if (!overdueActions.length) return { notifiedCount: 0 };
+
+    const users = await this.userRepository.find({ relations: { roles: true } });
+    const managerIds = users
+      .filter(
+        (user) =>
+          user.status === 'ACTIVE' &&
+          user.roles.some((role) => ['ADMIN', 'RESPONSABLE_VEILLE'].includes(role.name)),
+      )
+      .map((user) => user.id);
+
+    let notifiedCount = 0;
+    for (const action of overdueActions) {
+      const dueStr = String(action.dueDate).slice(0, 10);
+      const recipients = [
+        ...new Set(
+          [...managerIds, action.owner?.id].filter((id): id is number => Number.isInteger(id)),
+        ),
+      ];
+      const created = await this.notificationsService.notifyInAppOnce(
+        recipients,
+        'Action en retard',
+        `L’action « ${action.title} » a dépassé son échéance du ${dueStr}.`,
+        action.watchItem,
+      );
+      if (created.length > 0) notifiedCount += 1;
+    }
+    return { notifiedCount };
   }
 
   async remove(

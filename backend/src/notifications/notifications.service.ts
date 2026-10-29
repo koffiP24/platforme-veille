@@ -137,6 +137,21 @@ export class NotificationsService {
       watchItem: watchItem ?? null,
     })));
   }
+
+  async notifyInAppOnce(userIds: number[], title: string, message: string, watchItem?: WatchItem | null) {
+    const uniqueIds = [...new Set(userIds.filter((id) => Number.isInteger(id)))];
+    if (!uniqueIds.length) return [];
+    const existing = await this.repo.find({
+      where: { title, message, channel: 'IN_APP' },
+      relations: { user: true },
+    });
+    const alreadyNotified = new Set(
+      existing.map((n) => n.user?.id).filter((id): id is number => Number.isInteger(id)),
+    );
+    const remainingIds = uniqueIds.filter((id) => !alreadyNotified.has(id));
+    if (!remainingIds.length) return [];
+    return this.notifyInApp(remainingIds, title, message, watchItem);
+  }
   async markAllRead(userId: number) {
     const result = await this.repo.createQueryBuilder()
       .update(Notification)

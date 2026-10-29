@@ -166,6 +166,7 @@ plateforme_veille/
 │   ├── vite.config.ts
 │   └── package.json
 │
+├── docker-compose.yml
 └── README.md
 ```
 
@@ -249,6 +250,14 @@ Puis quitter :
 4. Choisir **Create > Database**.
 5. Nom : `veille`.
 6. Enregistrer.
+
+### Avec Docker Compose — facultatif
+
+Si Docker est installé, vous pouvez démarrer une instance PostgreSQL 16 préconfigurée avec la base `veille` en une seule commande depuis la racine du dépôt :
+
+```bash
+docker compose up -d
+```
 
 ---
 
@@ -730,6 +739,8 @@ Les dates sont également renseignées automatiquement lors du passage à « En 
 à « Terminée » lorsqu’elles ne sont pas déjà définies. L’affectation, les changements
 d’état et les informations de suivi sont conservés dans le journal d’audit.
 
+Lorsqu’une action non clôturée (`OPEN` ou `IN_PROGRESS`) dépasse sa date d’échéance (`dueDate`), l’interface affiche un compteur et un badge rouge **« En retard »** dans la vue des actions, et le planificateur backend envoie automatiquement une notification d’alerte interne au responsable de l’action ainsi qu’aux administrateurs et responsables de veille.
+
 La migration `AddActionProgressFields` doit être exécutée avant d’utiliser ces champs.
 
 ### Import manuel de veilles
@@ -1005,7 +1016,7 @@ npm run test:e2e
 npm run test:cov
 ```
 
-Vérification effectuée le 29 octobre 2026 : `npm test` passe avec 77 tests dans 24 fichiers et `npm run build` réussit.
+Vérification effectuée le 29 octobre 2026 : `npm test` passe avec 78 tests dans 24 fichiers et `npm run build` réussit.
 
 ## 37. Frontend
 
