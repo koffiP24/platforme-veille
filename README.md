@@ -51,7 +51,7 @@ Ce README permet de **recréer et lancer le projet complet de A à Z à partir d
 - ExcelJS
 - PDFKit
 - Nodemailer
-- OpenAI API (analyse des veilles, facultative)
+- Fournisseurs Multi-IA (OpenAI, Gemini, Claude, DeepSeek, Groq — analyse des veilles, facultative)
 - Vitest / Supertest
 
 ### Frontend
@@ -78,13 +78,12 @@ La plateforme comprend notamment :
 - création et administration des sources ;
 - connecteurs RSS / Atom ;
 - API Crossref et autres API JSON compatibles ;
-- import manuel CSV / XLSX ;
+- import manuel CSV / XLSX / PDF ;
 - collecte manuelle et automatique ;
 - journal des collectes ;
 - normalisation ;
-- traduction automatique vers le français avec l’API DeepL ;
-- analyse IA de la pertinence, résumé et impacts potentiels, avec relecture humaine facultative ;
-- analyse assistée par IA des informations (pertinence, résumé et impacts potentiels), avec relecture humaine facultative ;
+- traduction automatique vers le français avec l’API DeepL (rotation multi-clés et reprise par lots) ;
+- analyse assistée par Multi-IA (pertinence, résumé, impacts potentiels et classification suggérée), avec relecture humaine ;
 - filtrage par sujets à surveiller ;
 - déduplication ;
 - gestion des éléments de veille ;
@@ -365,17 +364,18 @@ Si toutes les migrations attendues apparaissent comme exécutées, la base est p
 
 Créer un compte avec un **forfait DeepL API** et récupérer la clé dans **Compte → API Keys & Limits**. L’essai du traducteur web ne suffit pas : il faut une clé API. Le forfait API Developer offre un quota total de caractères ; vérifier le quota disponible dans le compte avant des collectes volumineuses.
 
-Dans **`backend/.env`**, renseigner exactement la ligne suivante avec sa propre clé :
+Dans **`backend/.env`**, renseigner une ou plusieurs clés :
 
 ```dotenv
-DEEPL_API_KEY=VOTRE_CLE_API_DEEPL
+DEEPL_API_KEYS=VOTRE_CLE_1,VOTRE_CLE_2
+# DEEPL_API_KEY reste disponible pour une configuration à une seule clé.
 ```
 
 Ne pas mettre cette clé dans `frontend/.env`, dans le code source ou dans Git. Redémarrer le backend après modification du fichier. Les clés API Free terminées par `:fx` utilisent automatiquement `https://api-free.deepl.com` ; les autres utilisent `https://api.deepl.com`.
 
-Après le filtrage des sujets, chaque veille nouvelle ou modifiée (RSS, Atom, API ou import manuel) est envoyée à DeepL avec son titre et son résumé. Les doublons inchangés sont ignorés avant l’appel pour préserver le quota. DeepL détecte la langue et traduit en français si nécessaire ; l’empreinte du contenu original reste inchangée pour la déduplication. Les veilles déjà enregistrées ne sont pas retraduites automatiquement.
+Après le filtrage des sujets, chaque veille nouvelle ou modifiée (RSS, Atom, API ou import manuel) est envoyée à DeepL avec son titre et son résumé. Les doublons inchangés sont ignorés avant l’appel pour préserver le quota. DeepL détecte la langue et traduit en français si nécessaire ; l’empreinte du contenu original reste inchangée pour la déduplication. Depuis la liste des veilles, les rôles habilités peuvent aussi lancer **Traduire les veilles existantes**. Cette action traite dix éléments par lot ; relancez-la tant qu’il reste des éléments. L’API `POST /api/v1/watch-items/translate-missing` accepte un lot de 1 à 20 éléments et conserve les champs d’origine.
 
-Si la clé est absente, invalide, si le quota est épuisé ou si DeepL est indisponible, la collecte continue avec le texte d’origine. Une indisponibilité temporaire suspend les nouveaux appels pendant une minute ; une clé refusée ou un quota épuisé suspend les appels jusqu’au redémarrage du backend.
+Si aucune clé n’est configurée, les veilles restent dans leur langue d’origine. Si une clé échoue, le service essaie les autres clés configurées. La collecte continue avec le texte d’origine si toutes les clés échouent ; une indisponibilité temporaire suspend les nouveaux appels pendant une minute, et si toutes les clés sont refusées ou à quota épuisé, les appels reprennent après le redémarrage du backend.
 
 Documentation : [clé et endpoints DeepL](https://developers.deepl.com/docs/getting-started/auth), [forfaits API](https://support.deepl.com/hc/en-us/articles/360021200939-DeepL-API-plans).
 
@@ -387,7 +387,7 @@ Le module propose un score de pertinence sur 100, une justification, un résumé
 
 Les appels externes sont désactivés par défaut. Pour les activer, copier les variables de `backend/.env.example` dans `backend/.env`, renseigner `OPENAI_API_KEY`, puis définir `AI_ENABLED=true` et `AI_ALLOW_EXTERNAL_PROCESSING=true`. L’analyse automatique après collecte reste facultative (`AI_AUTO_ANALYZE=true`) ; sinon, l’analyse peut être lancée depuis l’écran de qualification. `OPENAI_MODEL` et `AI_LABORATORY_CONTEXT` sont configurables.
 
-L’analyse envoie au fournisseur le titre, le résumé disponibles, la langue d’origine, la catégorie de la source, les sujets configurés et le contexte de laboratoire. Le catalogue interne des thèmes, domaines, mots-clés et laboratoires reste local ; l’IA suggère des libellés textuels qui peuvent être rapprochés des options existantes dans l’écran. Les URL et les données de compte ne sont pas transmises. L’application demande une réponse sans conservation applicative (`store: false`), mais l’envoi reste un traitement externe : activer ces options seulement après validation des règles de confidentialité applicables. Les migrations `AddWatchItemAiAnalyses` et `AddAiClassification` créent les tables et champs nécessaires ; les exécuter avant le démarrage.
+L’analyse envoie au fournisseur le titre, le résumé disponibles, la langue d’origine, la catégorie de la source, les sujets configurés et le contexte de laboratoire. Le catalogue interne des thèmes, domaines, mots-clés et laboratoires reste local ; l’IA suggère des libellés textuels qui peuvent être rapprochés des options existantes dans l’écran. Les URL et les données de compte ne sont pas transmises. L’application demande une réponse sans conservation applicative (`store: false`), mais l’envoi reste un traitement externe : activer ces options seulement après validation des règles de confidentialité applicables. Les migrations `AddWatchItemAiAnalyses`, `AddAiClassification`, `AddAiKeywordWeights` et `AddAiExecutionMetadata` créent les tables et champs nécessaires ; les exécuter avant le démarrage.
 
 ---
 
@@ -638,12 +638,13 @@ Les autres sources de type **API** doivent être publiques et renvoyer directeme
 
 ---
 
-## 23. Import manuel CSV / XLSX
+## 23. Import manuel CSV / XLSX / PDF
 
 L’import manuel accepte :
 
 - CSV ;
 - XLSX ;
+- PDF (avec couche de texte structurée en blocs) ;
 - jusqu’à 5 Mo ;
 - jusqu’à 5 000 lignes.
 
@@ -847,6 +848,8 @@ Formats disponibles :
 - XLSX ;
 - CSV.
 
+L’option **« Veilles publiées uniquement »** est cochée par défaut : lorsqu’elle est désactivée, toutes les veilles de la période sont incluses quel que soit leur statut. Le formulaire signale directement l’absence de veille correspondante avant le téléchargement.
+
 La page présente l’historique sous forme de cartes avec la périodicité, la période couverte, le format, le statut, la date de génération et l’action de téléchargement.
 
 Les fichiers sont enregistrés sous :
@@ -861,7 +864,7 @@ backend/storage/reports/
 
 ## 29. Journal d’audit
 
-Le journal permet de tracer les opérations importantes de l’application. La page est paginée côté serveur ; elle donne le total réel et permet de parcourir jusqu’aux 500 opérations les plus récentes, par groupe. Chaque requête ne charge qu’une page. Les détails présentent les champs modifiés et prennent aussi en charge les instantanés sous forme de listes ou de valeurs simples.
+Le journal permet de tracer les opérations importantes de l’application. La page est paginée côté serveur et limite à 500 le nombre d’opérations accessibles par groupe ; le compteur et la pagination respectent ce plafond. Chaque requête ne charge qu’une page. Les détails présentent les champs modifiés et prennent aussi en charge les instantanés sous forme de listes ou de valeurs simples.
 
 Il trace notamment :
 
@@ -941,6 +944,11 @@ Depuis la page de récupération, le lien de retour ouvre la connexion dans l’
 | GET | `/api/v1/watch-items` | Liste |
 | GET | `/api/v1/watch-items/:id` | Détail |
 | GET | `/api/v1/watch-items/:id/qualification` | Qualification |
+| PATCH | `/api/v1/watch-items/:id/qualification` | Enregistrer la qualification métier |
+| GET | `/api/v1/watch-items/:id/ai-analysis` | Lire la dernière proposition d’analyse IA |
+| POST | `/api/v1/watch-items/:id/ai-analysis` | Générer ou actualiser une proposition d’analyse IA |
+| PATCH | `/api/v1/watch-items/:id/ai-analysis/:analysisId/review` | Enregistrer la relecture humaine d’une proposition IA |
+| POST | `/api/v1/watch-items/translate-missing` | Traduire un lot de veilles déjà collectées qui n’ont pas de version française |
 
 Les modules de validation, actions, abonnements, notifications, rapports, audit, santé et dashboard exposent également leurs routes sous `/api/v1`.
 
@@ -997,7 +1005,7 @@ npm run test:e2e
 npm run test:cov
 ```
 
-Vérification effectuée le 28 octobre 2026 : `npm test` passe avec 76 tests dans 24 fichiers et `npm run build` réussit.
+Vérification effectuée le 29 octobre 2026 : `npm test` passe avec 77 tests dans 24 fichiers et `npm run build` réussit.
 
 ## 37. Frontend
 
@@ -1009,7 +1017,7 @@ npm test
 npm run preview
 ```
 
-Vérification effectuée le 28 octobre 2026 : `npm test` passe avec 8 tests dans 5 fichiers et `npm run build` réussit.
+Vérification effectuée le 29 octobre 2026 : `npm test` passe avec 8 tests dans 5 fichiers et `npm run build` réussit.
 
 ## Vérification locale de sécurité
 
@@ -1070,7 +1078,7 @@ Ils doivent être servis en HTTPS en production. Un exemple de reverse proxy et 
 | CORS | Mauvaise valeur FRONTEND_URL | Utiliser l’URL exacte de Vite |
 | RSS/API échoue | URL externe indisponible | Tester l’URL et le connecteur |
 | HTTP 402 | Service distant exige paiement/quota | Vérifier le fournisseur |
-| Traduction absente | Clé DeepL absente, invalide, quota épuisé ou API indisponible | Vérifier `DEEPL_API_KEY`, le forfait API et son quota, puis redémarrer le backend |
+| Traduction absente | Clé DeepL absente, invalide, quota épuisé ou API indisponible | Vérifier `DEEPL_API_KEYS` (ou `DEEPL_API_KEY`), le forfait API et son quota, puis redémarrer le backend |
 | Gmail n’envoie pas | Mot de passe application absent | Vérifier SMTP_USER / SMTP_APP_PASSWORD |
 | Changement .env ignoré | Processus non redémarré | Redémarrer backend/frontend |
 
@@ -1248,7 +1256,7 @@ OPENAI_MODEL=gpt-4.1-mini
 
 Dans cette configuration, les variables `AI_MAX_KEY_ATTEMPTS` et `AI_ALLOW_MANUAL_FAILOVER` peuvent être omises du fichier `backend/.env`.
 
-DeepL accepte également plusieurs clés. Utilisez `DEEPL_API_KEYS` avec des clés séparées par des virgules ; `DEEPL_API_KEY` reste compatible pour une seule clé. Les clés sont nettoyées et utilisées en rotation entre les appels de traduction :
+DeepL accepte également plusieurs clés. Utilisez `DEEPL_API_KEYS` avec des clés séparées par des virgules ; `DEEPL_API_KEY` reste compatible pour une seule clé. Les clés sont nettoyées et utilisées en rotation entre les appels. Si une clé échoue, le service essaie les suivantes avant de laisser le contenu dans sa langue d’origine :
 
 ```dotenv
 DEEPL_API_KEYS=cle_deepl_1,cle_deepl_2

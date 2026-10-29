@@ -74,6 +74,7 @@ import {
 import type {
   WatchItem,
 } from '../services/watch-items.service';
+import { translateMissingWatchItems } from '../services/watch-items.service';
 
 import {
   createSource,
@@ -99,6 +100,12 @@ const toast =
 
 function queryValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
+}
+
+type AiQualificationFilter = '' | 'GENERATED' | 'NOT_GENERATED';
+
+function queryAiQualification(value: unknown): AiQualificationFilter {
+  return value === 'GENERATED' || value === 'NOT_GENERATED' ? value : '';
 }
 
 function titleHtml(title: string): string {
@@ -336,6 +343,78 @@ const canCreateSource =
         'OPERATEUR_VEILLE',
       ),
   );
+
+const canTranslateExisting = computed(() =>
+  ['ADMIN', 'RESPONSABLE_VEILLE', 'OPERATEUR_VEILLE']
+    .some((role) => sourceRoles.value.includes(role)),
+);
+const translatingExisting = ref(false);
+
+async function translateExistingBatch() {
+  if (translatingExisting.value) return;
+  translatingExisting.value = true;
+  try {
+    let translated = 0;
+    let failed = 0;
+    let remaining = 0;
+    let processedAnyBatch = false;
+
+    // Chaque requête traite un lot limité. On enchaîne les lots ici pour que
+    // l’utilisateur puisse lancer la reprise une seule fois depuis cette page.
+    do {
+      const result = (await translateMissingWatchItems()).data;
+      processedAnyBatch = true;
+      translated += result.translated;
+      failed += result.failed;
+      remaining = result.remaining;
+
+      // S’il n’y a aucun succès, les éléments restants sont probablement en
+      // échec (quota ou clés DeepL) : arrêter évite une boucle sans progrès.
+      if (result.translated === 0) break;
+    } while (remaining > 0);
+
+    if (translated > 0 && remaining === 0) {
+      toast.add({
+        severity: 'success',
+        summary: 'Traductions enregistrées',
+        detail: `${translated} veille(s) traduite(s). Toutes les veilles en attente ont été traitées.`,
+        life: 7000,
+      });
+      await load();
+    } else if (translated > 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Traduction partielle',
+        detail: `${translated} veille(s) traduite(s), ${remaining} restent à traiter. ${failed} échec(s) ; vérifiez les clés ou le quota DeepL puis relancez l’action ici.`,
+        life: 9000,
+      });
+      await load();
+    } else if (remaining > 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Traduction indisponible',
+        detail: `${failed} veille(s) n’ont pas pu être traduites. Vérifiez les clés et le quota DeepL, puis relancez l’action ici.`,
+        life: 8000,
+      });
+    } else if (processedAnyBatch) {
+      toast.add({
+        severity: 'info',
+        summary: 'Aucune traduction à reprendre',
+        detail: 'Toutes les veilles disposent déjà d’une version française.',
+        life: 5000,
+      });
+    }
+  } catch (cause) {
+    toast.add({
+      severity: 'error',
+      summary: 'Traduction impossible',
+      detail: errorMessage(cause, 'Impossible de traduire les veilles existantes.'),
+      life: 7000,
+    });
+  } finally {
+    translatingExisting.value = false;
+  }
+}
 
 
 async function submitSource() {
@@ -576,11 +655,7 @@ const filters =
       queryValue(initialListQuery.sourceType),
 
     aiQualified:
-      initialListQuery.aiQualified === 'true'
-        ? true
-        : initialListQuery.aiQualified === 'false'
-          ? false
-          : undefined,
+      queryAiQualification(initialListQuery.aiQualified),
 
     addedOrder:
       querySortOrder(initialListQuery.addedOrder),
@@ -616,8 +691,8 @@ function listStateQuery() {
     if (filters.value[key]) query[key] = filters.value[key];
   }
 
-  if (filters.value.aiQualified !== undefined) {
-    query.aiQualified = String(filters.value.aiQualified);
+  if (filters.value.aiQualified) {
+    query.aiQualified = filters.value.aiQualified;
   }
 
   if (filters.value.favoritesOnly) query.favorites = '1';
@@ -677,8 +752,8 @@ const sourceTypeOptions =
 
 
 const aiQualificationOptions = [
-  { label: 'Qualification IA générée', value: true },
-  { label: 'Qualification IA non générée', value: false },
+  { label: 'Qualification IA générée', value: 'GENERATED' },
+  { label: 'Qualification IA non générée', value: 'NOT_GENERATED' },
 ];
 
 
@@ -899,7 +974,7 @@ async function load() {
           criticality: filters.value.criticality,
           watchType: filters.value.watchType,
           sourceType: filters.value.sourceType,
-          aiQualified: filters.value.aiQualified,
+          aiQualified: filters.value.aiQualified || undefined,
           page: filters.value.page,
           limit: filters.value.limit,
           sortBy: filters.value.sortBy,
@@ -1335,7 +1410,7 @@ function resetFilters() {
       '',
 
     aiQualified:
-      undefined,
+      '',
 
     addedOrder:
       'DESC',
@@ -1497,6 +1572,9 @@ onBeforeUnmount(() => {
         " :subtitle="pageSubtitle
           " eyebrow="Veille" icon="pi pi-book">
         <template #actions>
+
+          <Button v-if="canTranslateExisting" label="Traduire les veilles existantes" icon="pi pi-language"
+            severity="secondary" :loading="translatingExisting" @click="translateExistingBatch" />
 
           <Button v-if="
             canCreateSource

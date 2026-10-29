@@ -114,6 +114,7 @@ const logs =
   ref<AuditLog[]>([]);
 
 const totalLogs = ref(0);
+const auditCapped = ref(false);
 const firstRow = ref(0);
 const pageSize = ref(20);
 
@@ -1449,6 +1450,7 @@ async function load(page = Math.floor(firstRow.value / pageSize.value)) {
 
     logs.value = auditResult.value.data.items;
     totalLogs.value = auditResult.value.data.total;
+    auditCapped.value = auditResult.value.data.capped;
     firstRow.value = auditResult.value.data.page * pageSize.value;
 
 
@@ -1553,8 +1555,8 @@ group in
       </nav>
 
 
-      <SectionCard :title="`${totalLogs} opération${totalLogs > 1 ? 's' : ''}${totalLogs > 500 ? ' au total' : ''}`
-        " :subtitle="totalLogs > 500 ? 'Affichage des 500 opérations les plus récentes maximum.' : 'Toutes les actions importantes réalisées dans l’application.'" icon="pi pi-list">
+      <SectionCard :title="`${totalLogs} opération${totalLogs > 1 ? 's' : ''}${auditCapped ? ' (limite atteinte)' : ''}`
+        " :subtitle="auditCapped ? 'Seules les 500 opérations les plus récentes sont accessibles.' : 'Toutes les actions importantes réalisées dans l’application.'" icon="pi pi-list">
 
         <DataTable
           :key="activeGroup"
@@ -1564,7 +1566,7 @@ group in
           lazy
           :first="firstRow"
           :rows="pageSize"
-          :total-records="Math.min(totalLogs, 500)"
+          :total-records="totalLogs"
           :rows-per-page-options="[10, 20, 50]"
           size="small"
           @page="changePage"

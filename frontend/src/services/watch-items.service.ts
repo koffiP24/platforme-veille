@@ -52,3 +52,10 @@ export function getWatchItem(id: number) {
 export function translateWatchItemToEnglish(id: number) {
   return api.post<WatchItem>(`/watch-items/${id}/translate-en`);
 }
+
+export function translateMissingWatchItems(limit = 10) {
+  return api.post<{ processed: number; translated: number; failed: number; remaining: number }>(
+    '/watch-items/translate-missing',
+    { limit },
+  );
+}

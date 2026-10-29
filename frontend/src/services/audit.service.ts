@@ -10,7 +10,7 @@ export interface AuditPage<T> {
 
 export function getAuditLogs<T>(params: { page: number; limit: number; group: string }) {
   return api.get<AuditPage<T>>('/audit', {
-    params: { ...params, actualisation: Date.now() },
+    params,
     headers: { 'Cache-Control': 'no-cache' },
   });
 }

@@ -42,6 +42,25 @@ describe('DeepLService', () => {
     expect(request).toHaveBeenCalledWith('https://api.deepl.com/v2/translate', expect.any(Object));
   });
 
+  it('essaie la clé suivante si la première est refusée ou à quota épuisé', async () => {
+    vi.stubEnv('DEEPL_API_KEYS', 'first-key:fx,second-key:fx');
+    const request = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 456 })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ translations: [
+        { text: 'Normes environnementales', detected_source_language: 'EN' },
+        { text: 'Nouvelles règles sur l’eau', detected_source_language: 'EN' },
+      ] }) });
+    vi.stubGlobal('fetch', request);
+
+    await expect(new DeepLService().translate(item as never)).resolves.toMatchObject({
+      title: 'Normes environnementales',
+      summary: 'Nouvelles règles sur l’eau',
+    });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[0][1].headers.Authorization).toBe('DeepL-Auth-Key first-key:fx');
+    expect(request.mock.calls[1][1].headers.Authorization).toBe('DeepL-Auth-Key second-key:fx');
+  });
+
   it('garde le texte déjà français et évite un appel si sa langue est connue', async () => {
     vi.stubEnv('DEEPL_API_KEY', 'test-key:fx');
     const request = vi.fn();

@@ -746,7 +746,7 @@ onMounted(
                 item
             ">
 
-                <SectionCard :title="displayedQualificationTitle
+                <SectionCard class="qualification-item-card" :title="displayedQualificationTitle
                     " :subtitle="`Source : ${item.source?.name ?? 'Non renseignée'}`
                         " icon="pi pi-file">
 
@@ -1219,13 +1219,27 @@ onMounted(
         var(--app-text-secondary);
 
     font-size:
-        0.78rem;
+        0.8rem;
 
     line-height:
-        1.6;
+        1.7;
 
     white-space:
         pre-line;
+}
+
+.qualification-item-card :deep(.section-header h3) {
+    font-size:
+        clamp(1.25rem, 2.4vw, 1.8rem);
+
+    font-weight:
+        780;
+
+    line-height:
+        1.25;
+
+    overflow-wrap:
+        anywhere;
 }
 
 .ai-analysis {

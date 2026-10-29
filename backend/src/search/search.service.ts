@@ -43,7 +43,7 @@ export class SearchService {
         SELECT 1 FROM watch_item_ai_analyses ai_analysis
         WHERE ai_analysis.watch_item_id = item.id
       )`;
-      qb.andWhere(dto.aiQualified ? hasAiQualification : `NOT ${hasAiQualification}`);
+      qb.andWhere(dto.aiQualified === 'GENERATED' ? hasAiQualification : `NOT ${hasAiQualification}`);
     }
 
     if (dto.q?.trim()) {

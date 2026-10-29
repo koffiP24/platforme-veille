@@ -5,7 +5,7 @@ export interface SearchParams {
   criticality?: string;
   watchType?: string;
   sourceType?: string;
-  aiQualified?: boolean;
+  aiQualified?: 'GENERATED' | 'NOT_GENERATED';
   sourceId?: number;
   domainId?: number;
   laboratoryId?: number;

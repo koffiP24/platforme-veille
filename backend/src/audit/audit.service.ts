@@ -66,7 +66,7 @@ export class AuditService {
     });
     return {
       items: await this.withReadableReferences(logs),
-      total,
+      total: visibleTotal,
       page,
       limit,
       capped: total > MAX_VISIBLE_AUDIT_LOGS,

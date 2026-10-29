@@ -216,6 +216,43 @@ export class WatchItemsService {
     return this.watchItemRepository.save(item);
   }
 
+  async findItemsMissingFrenchTranslation(limit = 10) {
+    return this.watchItemRepository.createQueryBuilder('item')
+      .where("(item.frenchTitle IS NULL OR BTRIM(item.frenchTitle) = '')")
+      .orWhere("(item.summary IS NOT NULL AND BTRIM(item.summary) <> '' AND (item.frenchSummary IS NULL OR BTRIM(item.frenchSummary) = ''))")
+      .orderBy('item.createdAt', 'ASC')
+      .addOrderBy('item.id', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
+  async countItemsMissingFrenchTranslation() {
+    return this.watchItemRepository.createQueryBuilder('item')
+      .where("(item.frenchTitle IS NULL OR BTRIM(item.frenchTitle) = '')")
+      .orWhere("(item.summary IS NOT NULL AND BTRIM(item.summary) <> '' AND (item.frenchSummary IS NULL OR BTRIM(item.frenchSummary) = ''))")
+      .getCount();
+  }
+
+  async saveFrenchTranslation(id: number, translation: {
+    title: string;
+    summary: string | null;
+    originalTitle: string;
+    originalSummary: string | null;
+    originalLanguage: string | null;
+    frenchTitle: string | null;
+    frenchSummary: string | null;
+  }) {
+    const item = await this.findOne(id);
+    item.originalTitle ??= translation.originalTitle;
+    item.originalSummary ??= translation.originalSummary;
+    item.originalLanguage ??= translation.originalLanguage;
+    item.frenchTitle = translation.frenchTitle;
+    item.frenchSummary = translation.frenchSummary;
+    item.title = translation.frenchTitle ?? translation.title;
+    item.summary = translation.frenchSummary ?? translation.summary;
+    return this.watchItemRepository.save(item);
+  }
+
   async findOneForRoles(id: number, roles: string[]) {
     const item = await this.findOne(id);
     const hasInternalRole = [
